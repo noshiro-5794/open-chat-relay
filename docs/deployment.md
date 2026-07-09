@@ -397,3 +397,31 @@ docker compose ps
 docker compose --profile webtransport up -d --build api outbox-worker console webtransport-gateway
 .smoke-venv/bin/python scripts/smoke_all.py --webtransport --gateway-url http://127.0.0.1:18081
 ```
+
+## Demo Clients
+
+The shared chat demo can be deployed as an optional web client:
+
+```bash
+OPEN_CHAT_RELAY_DEMO_API_BASE_URL=https://api.chat.example.com \
+docker compose --profile demo up -d --build chat-demo
+```
+
+Expose it through a reverse proxy, for example:
+
+```caddyfile
+app.chat.example.com {
+	reverse_proxy 127.0.0.1:15174
+}
+```
+
+The Windows desktop demo uses the same React UI through Electron:
+
+```bash
+cd apps/chat-demo
+npm install
+VITE_OPEN_CHAT_RELAY_API_BASE_URL=https://api.chat.example.com npm run build:web
+npm run package:windows
+```
+
+The generated Windows installer is written under `apps/chat-demo/release`.

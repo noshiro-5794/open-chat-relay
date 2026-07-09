@@ -37,6 +37,7 @@ core backend features for a self-hosted communication tool:
 - WebTransport gateway with optional HTTP/3 and QUIC runtime
 - TypeScript SDK with server-driven WebTransport/WebSocket/SSE fallback
 - React admin console for status, transport, config, users, and audit views
+- Shared React chat demo for web and Windows desktop shells
 
 ## Quick Start
 
@@ -137,4 +138,10 @@ The TypeScript SDK lives in:
 
 ```text
 packages/sdk-js
+```
+
+The web and Windows chat demo lives in:
+
+```text
+apps/chat-demo
 ```

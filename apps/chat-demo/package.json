@@ -1,0 +1,44 @@
+{
+  "name": "@openchatrelay/chat-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "check": "tsc --noEmit && node --check server.mjs && node --check electron/main.cjs && node --check electron/preload.cjs",
+    "dev:web": "vite --host 0.0.0.0 --port 5174",
+    "dev:desktop": "electron electron/main.cjs",
+    "build:web": "tsc && vite build",
+    "start": "node server.mjs",
+    "package:windows": "tsc && vite build && electron-builder --win"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.0.0",
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.0.0",
+    "vite": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0"
+  },
+  "build": {
+    "appId": "dev.openchatrelay.chatdemo",
+    "productName": "OpenChatRelay Demo",
+    "files": [
+      "dist/**/*",
+      "electron/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    }
+  }
+}
