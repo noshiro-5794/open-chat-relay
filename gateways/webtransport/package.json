@@ -1,0 +1,20 @@
+{
+  "name": "@openchatrelay/webtransport-gateway",
+  "version": "0.1.0",
+  "description": "OpenChatRelay WebTransport gateway with control-plane and optional HTTP/3 runtime.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "check": "node --check src/server.js && node --check test/server.test.js && node --check scripts/smoke-runtime.mjs",
+    "smoke:runtime": "node scripts/smoke-runtime.mjs",
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@fails-components/webtransport": "^1.6.5",
+    "@fails-components/webtransport-transport-http3-quiche": "^1.6.5"
+  }
+}

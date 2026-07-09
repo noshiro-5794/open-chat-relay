@@ -150,6 +150,7 @@ activemq-data/
 # Environments
 .env
 .envrc
+.smoke-venv/
 .venv
 env/
 venv/
@@ -205,6 +206,13 @@ tempCodeRunnerFile.py
 
 # Ruff stuff:
 .ruff_cache/
+
+# Node / TypeScript
+node_modules/
+dist/
+
+# Local deployment secrets and generated certificates
+local/
 
 # PyPI configuration file
 .pypirc

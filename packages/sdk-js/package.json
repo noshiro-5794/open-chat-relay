@@ -1,0 +1,16 @@
+{
+  "name": "@openchatrelay/sdk",
+  "version": "0.1.0",
+  "description": "OpenChatRelay TypeScript client SDK with transport fallback.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "npm run build && node --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

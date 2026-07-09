@@ -1,0 +1,397 @@
+:root {
+  color: #16201b;
+  background: #eef2ef;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid #d8ded9;
+  padding: 11px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+th {
+  color: #5d6a62;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+td {
+  color: #1d2822;
+  font-size: 14px;
+}
+
+code {
+  white-space: normal;
+  word-break: break-word;
+  color: #31564a;
+}
+
+.boot,
+.login-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+}
+
+.boot {
+  color: #5d6a62;
+}
+
+.login-screen {
+  padding: 24px;
+  background:
+    linear-gradient(120deg, rgba(42, 104, 82, 0.08), transparent 38%),
+    #eef2ef;
+}
+
+.login-panel {
+  width: min(420px, 100%);
+  border: 1px solid #d8ded9;
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 28px;
+  box-shadow: 0 22px 60px rgba(24, 38, 31, 0.09);
+}
+
+.login-panel h1,
+.content-header h2,
+.panel-toolbar h3 {
+  margin: 0;
+}
+
+.login-panel h1 {
+  font-size: 34px;
+}
+
+.eyebrow {
+  margin: 0 0 6px;
+  color: #5d6a62;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.login-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 24px;
+  border: 1px solid #d8ded9;
+  border-radius: 6px;
+  background: #eef2ef;
+  padding: 4px;
+}
+
+.mode-tabs button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #435048;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.mode-tabs button.active {
+  background: #ffffff;
+  color: #203129;
+}
+
+.login-form label {
+  display: grid;
+  gap: 7px;
+  color: #435048;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.login-form input {
+  min-height: 42px;
+  border: 1px solid #cbd4ce;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #16201b;
+  padding: 0 12px;
+}
+
+.primary-button,
+.nav-button,
+.icon-button,
+.toggle-button {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.primary-button {
+  min-height: 42px;
+  gap: 8px;
+  background: #236b54;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.error-text {
+  margin: 0;
+  color: #a13f2b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.console-shell {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #d8ded9;
+  background: #18261f;
+  color: #eff5f1;
+  padding: 20px;
+}
+
+.brand-block {
+  padding: 4px 4px 20px;
+}
+
+.brand-block .eyebrow {
+  color: #9fb5aa;
+}
+
+.brand-block strong {
+  font-size: 22px;
+}
+
+.nav-list {
+  display: grid;
+  gap: 6px;
+}
+
+.nav-button {
+  min-height: 38px;
+  justify-content: flex-start;
+  gap: 9px;
+  background: transparent;
+  color: #dce8e1;
+  padding: 0 10px;
+}
+
+.nav-button.active,
+.nav-button:hover {
+  background: #284438;
+}
+
+.session-block {
+  margin-top: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 34px;
+  gap: 8px;
+  align-items: center;
+  color: #bfd0c7;
+  font-size: 12px;
+}
+
+.session-block span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  background: #ffffff;
+  color: #203129;
+}
+
+.sidebar .icon-button {
+  background: #284438;
+  color: #eff5f1;
+}
+
+.content {
+  min-width: 0;
+  padding: 24px;
+}
+
+.content-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.content-header h2 {
+  font-size: 28px;
+}
+
+.panel {
+  border: 1px solid #d8ded9;
+  border-radius: 8px;
+  background: #fbfcfb;
+  overflow: hidden;
+}
+
+.panel-toolbar {
+  min-height: 56px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #d8ded9;
+  padding: 0 14px;
+}
+
+.panel-toolbar h3 {
+  font-size: 15px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  border-bottom: 1px solid #d8ded9;
+}
+
+.metric {
+  display: grid;
+  gap: 4px;
+  border-right: 1px solid #d8ded9;
+  padding: 14px;
+}
+
+.metric:last-child {
+  border-right: 0;
+}
+
+.metric span {
+  color: #5d6a62;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.metric strong {
+  font-size: 20px;
+}
+
+.status-pill {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.status-pill.ok {
+  background: #dcefe5;
+  color: #236b54;
+}
+
+.status-pill.warn {
+  background: #f7e5da;
+  color: #a13f2b;
+}
+
+.toggle-button {
+  min-height: 30px;
+  background: #eef2ef;
+  color: #203129;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (max-width: 820px) {
+  .console-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .nav-list {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .nav-button {
+    justify-content: center;
+  }
+
+  .session-block {
+    margin-top: 0;
+  }
+
+  .content {
+    padding: 16px;
+  }
+
+  .content-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+}
