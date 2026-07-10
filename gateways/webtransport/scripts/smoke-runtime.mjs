@@ -15,8 +15,13 @@ const API_BASE_URL = (
 const GATEWAY_INTERNAL_TOKEN =
   process.env.OPEN_CHAT_RELAY_GATEWAY_INTERNAL_TOKEN ?? "change-this-local-gateway-token";
 const EXTERNAL_WEBTRANSPORT_URL = process.env.OPEN_CHAT_RELAY_RUNTIME_SMOKE_URL ?? null;
+const RAW_EXTERNAL_CERT_PATH = process.env.OPEN_CHAT_RELAY_RUNTIME_SMOKE_CERT_PATH;
 const EXTERNAL_CERT_PATH =
-  process.env.OPEN_CHAT_RELAY_RUNTIME_SMOKE_CERT_PATH ?? "../../local/certs/webtransport.crt";
+  RAW_EXTERNAL_CERT_PATH === undefined
+    ? "../../local/certs/webtransport.crt"
+    : ["", "none", "system"].includes(RAW_EXTERNAL_CERT_PATH.trim().toLowerCase())
+      ? null
+      : RAW_EXTERNAL_CERT_PATH;
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -74,10 +79,11 @@ async function main() {
     }
 
     url = withToken(url, auth.access_token);
-    const transport = new WebTransport(url, {
-      requireUnreliable: true,
-      serverCertificateHashes: [certificateHash(certificate.certPath)],
-    });
+    const transportOptions = { requireUnreliable: true };
+    if (certificate.certPath !== null) {
+      transportOptions.serverCertificateHashes = [certificateHash(certificate.certPath)];
+    }
+    const transport = new WebTransport(url, transportOptions);
     await transport.ready;
 
     const stream = await transport.createBidirectionalStream();
