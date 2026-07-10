@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from httpx import AsyncClient
 
 
@@ -315,7 +317,8 @@ async def test_delete_message_creates_event_and_hides_from_history(client: Async
     events_response = await client.get(f"/v1/rooms/{room['id']}/events", headers=headers)
 
     assert delete_response.status_code == 200
-    assert delete_response.json()["deleted_at"] is not None
+    deleted_at = datetime.fromisoformat(delete_response.json()["deleted_at"])
+    assert deleted_at.tzinfo is None
     assert history_response.status_code == 200
     assert history_response.json() == []
     events = events_response.json()

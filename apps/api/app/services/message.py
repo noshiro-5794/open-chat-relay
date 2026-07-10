@@ -302,7 +302,7 @@ async def delete_message(
         room_id=room_id,
         message_id=message_id,
     )
-    message.deleted_at = datetime.now(UTC)
+    message.deleted_at = datetime.now(UTC).replace(tzinfo=None)
 
     event = await create_message_event(
         session,
