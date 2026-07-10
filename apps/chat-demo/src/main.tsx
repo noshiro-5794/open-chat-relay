@@ -1273,6 +1273,16 @@ function App() {
             <dt>Fallback</dt>
             <dd>{connection?.skipped.length ? `${connection.skipped.length} skipped` : "None"}</dd>
           </dl>
+          {connection?.skipped.length ? (
+            <div className="fallback-details">
+              {connection.skipped.map((item) => (
+                <div key={`${item.transport}-${item.reason}`} className="fallback-row">
+                  <strong>{item.transport}</strong>
+                  <span>{item.reason}</span>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </section>
         <section className="protocol-card compact">
           <div className="panel-title">
