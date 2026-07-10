@@ -282,10 +282,18 @@ async function request<T>(
     headers.set("Authorization", `Bearer ${options.token}`);
   }
 
-  const response = await fetch(new URL(path, apiBaseUrl), {
-    ...options,
-    headers,
-  });
+  const url = new URL(path, apiBaseUrl);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+    });
+  } catch (requestError) {
+    const method = options.method ?? "GET";
+    const reason = requestError instanceof Error ? requestError.message : "Network request failed.";
+    throw new ApiError(0, `${method} ${url.toString()} failed before receiving a response: ${reason}`);
+  }
   if (!response.ok) {
     let message = `Request failed with HTTP ${response.status}`;
     try {
