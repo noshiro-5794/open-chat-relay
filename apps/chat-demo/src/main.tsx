@@ -351,6 +351,18 @@ function App() {
         }
         return current.some((item) => item.id === message.id) ? current : [...current, message];
       });
+      if (event.type === "message.deleted") {
+        setSearchResults((current) =>
+          current.map((item) =>
+            item.id === message.id ? { ...item, deleted_at: message.deleted_at } : item,
+          ),
+        );
+        setReplyTarget((current) => (current?.id === message.id ? null : current));
+        setEditingMessageId((current) => (current === message.id ? null : current));
+        if (editingMessageId === message.id) {
+          setEditingDraft("");
+        }
+      }
       return;
     }
     if (event.type === "typing.updated" && typeof event.actor_id === "string") {
@@ -408,6 +420,10 @@ function App() {
     if (tokenPair === null || selectedWorkspaceId === null || emailToAdd === "") {
       return;
     }
+    if (emailToAdd.toLowerCase() === tokenPair.user.email.toLowerCase()) {
+      setError("You cannot add yourself as a friend.");
+      return;
+    }
     setError(null);
     setBusyAction("add-contact");
     try {
@@ -463,16 +479,27 @@ function App() {
     member: WorkspaceMember,
   ): Promise<Room> {
     const primaryName = `${tokenPair?.user.display_name ?? "You"} and ${member.display_name}`;
-    try {
-      return await createRoom(token, workspaceId, primaryName, { isPrivate: true });
-    } catch (createError) {
-      if (!(createError instanceof ApiError) || createError.status !== 409) {
-        throw createError;
+    const stableSuffix = member.user_id.slice(0, 8);
+    const uniqueSuffix = Date.now().toString(36);
+    const candidateNames = [
+      primaryName,
+      `${member.display_name} ${stableSuffix}`,
+      `${member.display_name} ${stableSuffix} ${uniqueSuffix}`,
+    ];
+    let lastConflict: ApiError | null = null;
+
+    for (const name of candidateNames) {
+      try {
+        return await createRoom(token, workspaceId, name, { isPrivate: true });
+      } catch (createError) {
+        if (!(createError instanceof ApiError) || createError.status !== 409) {
+          throw createError;
+        }
+        lastConflict = createError;
       }
     }
-    return createRoom(token, workspaceId, `${member.display_name} ${member.user_id.slice(0, 8)}`, {
-      isPrivate: true,
-    });
+
+    throw lastConflict ?? new Error("Unable to create direct message.");
   }
 
   async function handleInviteMember() {
@@ -702,15 +729,23 @@ function App() {
     if (tokenPair === null || selectedRoomId === null || !window.confirm("Delete this message?")) {
       return;
     }
+    const roomId = selectedRoomId;
     setBusyAction(`delete-${message.id}`);
     setError(null);
     try {
-      const deletedMessage = await deleteMessage(tokenPair.access_token, selectedRoomId, message.id);
+      const deletedMessage = await deleteMessage(tokenPair.access_token, roomId, message.id);
       setMessages((current) =>
+        current.map((item) => (item.id === message.id ? deletedMessage : item)),
+      );
+      setSearchResults((current) =>
         current.map((item) => (item.id === message.id ? deletedMessage : item)),
       );
       if (replyTarget?.id === message.id) {
         setReplyTarget(null);
+      }
+      if (editingMessageId === message.id) {
+        setEditingMessageId(null);
+        setEditingDraft("");
       }
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Unable to delete message.");
