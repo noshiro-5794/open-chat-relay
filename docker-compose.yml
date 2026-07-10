@@ -145,8 +145,14 @@ services:
     volumes:
       - ${OPEN_CHAT_RELAY_WEBTRANSPORT_CERTS_DIR:-./local/certs}:/certs:ro
     ports:
-      - "${OPEN_CHAT_RELAY_WEBTRANSPORT_GATEWAY_TCP_BIND_HOST:-127.0.0.1}:${OPEN_CHAT_RELAY_WEBTRANSPORT_GATEWAY_TCP_HOST_PORT:-8081}:8080/tcp"
-      - "${OPEN_CHAT_RELAY_WEBTRANSPORT_GATEWAY_UDP_BIND_HOST:-127.0.0.1}:${OPEN_CHAT_RELAY_WEBTRANSPORT_GATEWAY_UDP_HOST_PORT:-8081}:8080/udp"
+      - target: 8080
+        published: "${OPEN_CHAT_RELAY_WEBTRANSPORT_GATEWAY_TCP_HOST_PORT:-8081}"
+        host_ip: "${OPEN_CHAT_RELAY_WEBTRANSPORT_GATEWAY_TCP_BIND_HOST:-127.0.0.1}"
+        protocol: tcp
+      - target: 8080
+        published: "${OPEN_CHAT_RELAY_WEBTRANSPORT_GATEWAY_UDP_HOST_PORT:-8081}"
+        host_ip: "${OPEN_CHAT_RELAY_WEBTRANSPORT_GATEWAY_UDP_BIND_HOST:-127.0.0.1}"
+        protocol: udp
     depends_on:
       api:
         condition: service_healthy
