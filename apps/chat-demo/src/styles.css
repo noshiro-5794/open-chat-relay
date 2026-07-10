@@ -906,39 +906,103 @@ textarea:focus {
 .attachment-list,
 .attachment-drafts {
   display: grid;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
   margin-top: 8px;
 }
 
-.attachment-chip,
-.image-attachment {
+.image-preview-card,
+.file-preview-card,
+.draft-preview-card {
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr) auto;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
-  min-height: 34px;
+  gap: 10px;
+  min-height: 52px;
   border: 1px solid #dce4ee;
   border-radius: 7px;
-  padding: 7px 8px;
+  padding: 8px;
   color: #344154;
   background: #f8fafc;
   text-align: left;
 }
 
-.attachment-chip:hover,
-.image-attachment:hover {
+.image-preview-card,
+.file-preview-card {
+  width: min(340px, 100%);
+}
+
+.image-preview-card:hover,
+.file-preview-card:hover {
   color: #174ea6;
   background: #edf4ff;
 }
 
-.attachment-chip span,
-.image-attachment span {
+.image-preview-media,
+.draft-preview-media,
+.file-preview-icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  overflow: hidden;
+  border-radius: 6px;
+  color: #4a5c73;
+  background: #e8eef6;
+}
+
+.image-preview-media img,
+.draft-preview-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.file-preview-card.archive .file-preview-icon,
+.draft-preview-card .draft-preview-media {
+  color: #875300;
+  background: #fff3d6;
+}
+
+.file-preview-card.document .file-preview-icon {
+  color: #174ea6;
+  background: #e6f0ff;
+}
+
+.file-preview-card.folder .file-preview-icon {
+  color: #805100;
+  background: #ffefbd;
+}
+
+.file-preview-card.pending {
+  color: #64748b;
+  background: #f9fbfd;
+}
+
+.attachment-info {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.attachment-info strong,
+.attachment-info span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.attachment-chip button {
+.attachment-info strong {
+  color: #27364a;
+  font-size: 13px;
+}
+
+.attachment-info span {
+  color: #738195;
+  font-size: 12px;
+}
+
+.draft-preview-card button {
   display: grid;
   place-items: center;
   width: 22px;
@@ -949,7 +1013,7 @@ textarea:focus {
   background: transparent;
 }
 
-.attachment-chip button:hover {
+.draft-preview-card button:hover {
   color: #b42318;
   background: #ffe4e2;
 }

@@ -5,8 +5,12 @@ import {
   CornerUpLeft,
   Download,
   Edit3,
+  FileArchive,
+  FileText,
+  Folder,
   Hash,
   Home,
+  ImageIcon,
   LogOut,
   MessageSquareText,
   Paperclip,
@@ -1329,32 +1333,17 @@ function App() {
                         <div className="attachment-list">
                           {isPending
                             ? message.attachment_names.map((name) => (
-                                <div key={name} className="attachment-chip">
-                                  <Paperclip size={14} />
-                                  <span>{name}</span>
-                                </div>
+                                <FileNameAttachment key={name} name={name} />
                               ))
-                            : message.attachments.map((attachment) =>
-                                attachment.content_type.startsWith("image/") ? (
-                                  <button
-                                    key={attachment.id}
-                                    className="image-attachment"
-                                    onClick={() => void handleDownloadAttachment(attachment)}
-                                  >
-                                    <Paperclip size={15} />
-                                    <span>{attachment.filename}</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    key={attachment.id}
-                                    className="attachment-chip"
-                                    onClick={() => void handleDownloadAttachment(attachment)}
-                                  >
-                                    <Download size={14} />
-                                    <span>{attachment.filename}</span>
-                                  </button>
-                                ),
-                              )}
+                            : message.attachments.map((attachment) => (
+                                <AttachmentPreview
+                                  key={attachment.id}
+                                  attachment={attachment}
+                                  roomId={selectedRoomId}
+                                  token={tokenPair.access_token}
+                                  onOpen={handleDownloadAttachment}
+                                />
+                              ))}
                         </div>
                       )}
                       {!isPending && !isDeleted && (
@@ -1432,13 +1421,11 @@ function App() {
             {attachmentDrafts.length > 0 && (
               <div className="attachment-drafts">
                 {attachmentDrafts.map((attachment) => (
-                  <div key={attachment.id} className="attachment-chip">
-                    <Paperclip size={14} />
-                    <span>{attachment.file.name}</span>
-                    <button title="Remove attachment" onClick={() => removeAttachmentDraft(attachment.id)}>
-                      <X size={13} />
-                    </button>
-                  </div>
+                  <AttachmentDraftPreview
+                    key={attachment.id}
+                    draft={attachment}
+                    onRemove={removeAttachmentDraft}
+                  />
                 ))}
               </div>
             )}
@@ -1519,6 +1506,137 @@ function App() {
   );
 }
 
+function AttachmentPreview({
+  attachment,
+  roomId,
+  token,
+  onOpen,
+}: {
+  attachment: Attachment;
+  roomId: string | null;
+  token: string;
+  onOpen: (attachment: Attachment) => Promise<void>;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const isImage = attachment.content_type.startsWith("image/");
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!isImage || roomId === null) {
+      setPreviewUrl(null);
+      return;
+    }
+
+    void createAttachmentDownloadIntent(token, roomId, attachment.id)
+      .then((intent) => {
+        if (!cancelled) {
+          setPreviewUrl(intent.download_url);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPreviewUrl(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attachment.id, isImage, roomId, token]);
+
+  if (isImage) {
+    return (
+      <button
+        className="image-preview-card"
+        title={`Open ${attachment.filename}`}
+        onClick={() => void onOpen(attachment)}
+      >
+        <div className="image-preview-media">
+          {previewUrl === null ? (
+            <ImageIcon size={20} />
+          ) : (
+            <img src={previewUrl} alt={attachment.filename} loading="lazy" />
+          )}
+        </div>
+        <div className="attachment-info">
+          <strong>{attachment.filename}</strong>
+          <span>{formatBytes(attachment.size_bytes)}</span>
+        </div>
+        <Download size={15} />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      className={`file-preview-card ${attachmentKind(attachment.filename, attachment.content_type)}`}
+      title={`Open ${attachment.filename}`}
+      onClick={() => void onOpen(attachment)}
+    >
+      <span className="file-preview-icon">
+        {attachmentIcon(attachment.filename, attachment.content_type)}
+      </span>
+      <div className="attachment-info">
+        <strong>{attachment.filename}</strong>
+        <span>{attachmentLabel(attachment.filename, attachment.content_type)} · {formatBytes(attachment.size_bytes)}</span>
+      </div>
+      <Download size={15} />
+    </button>
+  );
+}
+
+function AttachmentDraftPreview({
+  draft,
+  onRemove,
+}: {
+  draft: AttachmentDraft;
+  onRemove: (id: string) => void;
+}) {
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const isImage = draft.file.type.startsWith("image/");
+
+  useEffect(() => {
+    if (!isImage) {
+      setPreviewUrl(null);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(draft.file);
+    setPreviewUrl(objectUrl);
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [draft.file, isImage]);
+
+  return (
+    <div className={isImage ? "draft-preview-card image" : "draft-preview-card"}>
+      <div className="draft-preview-media">
+        {isImage && previewUrl !== null ? (
+          <img src={previewUrl} alt={draft.file.name} />
+        ) : (
+          attachmentIcon(draft.file.name, draft.file.type)
+        )}
+      </div>
+      <div className="attachment-info">
+        <strong>{draft.file.name}</strong>
+        <span>{attachmentLabel(draft.file.name, draft.file.type)} · {formatBytes(draft.file.size)}</span>
+      </div>
+      <button title="Remove attachment" onClick={() => onRemove(draft.id)}>
+        <X size={13} />
+      </button>
+    </div>
+  );
+}
+
+function FileNameAttachment({ name }: { name: string }) {
+  return (
+    <div className={`file-preview-card pending ${attachmentKind(name, "")}`}>
+      <span className="file-preview-icon">{attachmentIcon(name, "")}</span>
+      <div className="attachment-info">
+        <strong>{name}</strong>
+        <span>Uploading</span>
+      </div>
+    </div>
+  );
+}
+
 function saveSession(tokenPair: TokenPair) {
   localStorage.setItem(TOKEN_STORAGE_KEY, tokenPair.access_token);
   localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(tokenPair.user));
@@ -1592,6 +1710,75 @@ function messageSummary(message: Message): string {
     return "Message deleted";
   }
   return message.content.length > 96 ? `${message.content.slice(0, 96)}...` : message.content;
+}
+
+function attachmentKind(filename: string, contentType: string): "archive" | "document" | "folder" | "file" {
+  const extension = filenameExtension(filename);
+  if (
+    contentType.includes("directory") ||
+    extension === "folder"
+  ) {
+    return "folder";
+  }
+  if (
+    contentType.includes("zip") ||
+    contentType.includes("compressed") ||
+    ["7z", "gz", "rar", "tar", "tgz", "zip"].includes(extension)
+  ) {
+    return "archive";
+  }
+  if (
+    contentType.includes("pdf") ||
+    contentType.startsWith("text/") ||
+    ["csv", "doc", "docx", "md", "pdf", "ppt", "pptx", "txt", "xls", "xlsx"].includes(extension)
+  ) {
+    return "document";
+  }
+  return "file";
+}
+
+function attachmentIcon(filename: string, contentType: string) {
+  const kind = attachmentKind(filename, contentType);
+  if (kind === "archive") {
+    return <FileArchive size={18} />;
+  }
+  if (kind === "document") {
+    return <FileText size={18} />;
+  }
+  if (kind === "folder") {
+    return <Folder size={18} />;
+  }
+  return <Paperclip size={18} />;
+}
+
+function attachmentLabel(filename: string, contentType: string): string {
+  const kind = attachmentKind(filename, contentType);
+  if (kind === "archive") {
+    return "Archive";
+  }
+  if (kind === "document") {
+    return "Document";
+  }
+  if (kind === "folder") {
+    return "Folder";
+  }
+  const extension = filenameExtension(filename);
+  return extension === "" ? "File" : extension.toUpperCase();
+}
+
+function filenameExtension(filename: string): string {
+  const segments = filename.toLowerCase().split(".");
+  return segments.length > 1 ? segments.at(-1) ?? "" : "";
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+  const units = ["B", "KB", "MB", "GB"];
+  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / 1024 ** exponent;
+  return `${value >= 10 || exponent === 0 ? value.toFixed(0) : value.toFixed(1)} ${units[exponent]}`;
 }
 
 function filterRooms(rooms: Room[], query: string): Room[] {
