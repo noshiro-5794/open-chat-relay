@@ -3,11 +3,13 @@ import { createRoot } from "react-dom/client";
 import {
   Check,
   CornerUpLeft,
+  Download,
   Edit3,
   Hash,
   Home,
   LogOut,
   MessageSquareText,
+  Paperclip,
   Plus,
   RadioTower,
   RefreshCw,
@@ -29,13 +31,18 @@ import {
 } from "@openchatrelay/sdk";
 import {
   ApiError,
+  type Attachment,
   type Message,
   type Room,
   type TokenPair,
+  type User,
   type Workspace,
   type WorkspaceMember,
   addRoomMember,
   addWorkspaceMember,
+  confirmAttachmentUpload,
+  createAttachmentDownloadIntent,
+  createAttachmentUploadIntent,
   createMessage,
   createRoom,
   createWorkspace,
@@ -46,6 +53,7 @@ import {
   listRoomPresence,
   listRoomMembers,
   listRooms,
+  listUsers,
   listWorkspaceMembers,
   listWorkspaces,
   login,
@@ -53,7 +61,9 @@ import {
   register,
   searchMessages,
   setApiBaseUrl,
+  updateMe,
   updateMessage,
+  uploadAttachmentObject,
 } from "./api";
 import "./styles.css";
 
@@ -68,6 +78,8 @@ interface PendingMessage {
   sender_id: string;
   content: string;
   reply_to_id: string | null;
+  attachment_ids: string[];
+  attachment_names: string[];
   created_at: string;
   delivery_status: DeliveryStatus;
 }
@@ -77,11 +89,19 @@ type RenderMessage = Message | PendingMessage;
 interface SendMessageOptions {
   retryPendingId?: string;
   replyToId?: string | null;
+  attachmentIds?: string[];
+  attachmentNames?: string[];
+}
+
+interface AttachmentDraft {
+  id: string;
+  file: File;
 }
 
 const TOKEN_STORAGE_KEY = "openchatrelay.demo.token";
 const USER_STORAGE_KEY = "openchatrelay.demo.user";
 const API_BASE_STORAGE_KEY = "openchatrelay.demo.apiBaseUrl";
+const QUICK_EMOJIS = ["👍", "😀", "🎉", "❤️", "🙏", "😂", "🔥", "✅"];
 const STALE_LOCAL_API_URLS = new Set([
   "http://localhost:8000",
   "http://127.0.0.1:8000",
@@ -99,14 +119,17 @@ function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [serverUsers, setServerUsers] = useState<User[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
+  const [attachmentDrafts, setAttachmentDrafts] = useState<AttachmentDraft[]>([]);
   const [draft, setDraft] = useState("");
   const [newSpaceName, setNewSpaceName] = useState("");
   const [contactEmail, setContactEmail] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [profileName, setProfileName] = useState(() => loadSession()?.user.display_name ?? "");
   const [searchQuery, setSearchQuery] = useState("");
   const [messageSearchQuery, setMessageSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Message[]>([]);
@@ -124,6 +147,7 @@ function App() {
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const openRoomSeqRef = useRef(0);
   const messageListRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId);
   const directRooms = rooms.filter((room) => room.is_private);
@@ -132,6 +156,7 @@ function App() {
   const visibleDirectRooms = filterRooms(directRooms, normalizedSearch);
   const visibleSpaceRooms = filterRooms(spaceRooms, normalizedSearch);
   const visibleHomeRooms = filterRooms(rooms, normalizedSearch);
+  const visibleServerUsers = filterUsers(serverUsers, normalizedSearch, tokenPair?.user.id);
   const activeTypingUsers = [...typingUsers].filter((userId) => userId !== tokenPair?.user.id);
   const onlineUserCount = [...presenceByUserId.values()].filter((status) => status !== "offline").length;
 
@@ -144,7 +169,9 @@ function App() {
     if (tokenPair === null) {
       return;
     }
+    setProfileName(tokenPair.user.display_name);
     void loadSpaces(tokenPair.access_token, tokenPair.user);
+    void refreshUsers(tokenPair.access_token);
   }, [tokenPair]);
 
   useEffect(() => {
@@ -270,10 +297,41 @@ function App() {
     }
   }
 
+  async function refreshUsers(token: string) {
+    try {
+      setServerUsers(await listUsers(token));
+    } catch {
+      setServerUsers([]);
+    }
+  }
+
+  async function handleSaveProfile() {
+    const nextName = profileName.trim();
+    if (tokenPair === null || nextName === "" || nextName === tokenPair.user.display_name) {
+      return;
+    }
+    setBusyAction("profile");
+    setError(null);
+    try {
+      const user = await updateMe(tokenPair.access_token, nextName);
+      const nextTokenPair = { ...tokenPair, user };
+      saveSession(nextTokenPair);
+      setTokenPair(nextTokenPair);
+      setServerUsers((current) =>
+        current.map((item) => (item.id === user.id ? user : item)),
+      );
+    } catch (profileError) {
+      setError(profileError instanceof Error ? profileError.message : "Unable to update profile.");
+    } finally {
+      setBusyAction(null);
+    }
+  }
+
   async function openRoom(token: string, roomId: string) {
     const sequence = ++openRoomSeqRef.current;
     setMessages([]);
     setPendingMessages([]);
+    setAttachmentDrafts([]);
     setTypingUsers(new Set());
     setPresenceByUserId(new Map());
     setReplyTarget(null);
@@ -424,8 +482,8 @@ function App() {
     }
   }
 
-  async function handleStartDirectMessage() {
-    const emailToAdd = contactEmail.trim();
+  async function handleStartDirectMessage(emailOverride?: string) {
+    const emailToAdd = (emailOverride ?? contactEmail).trim();
     if (tokenPair === null || selectedWorkspaceId === null || emailToAdd === "") {
       return;
     }
@@ -574,14 +632,36 @@ function App() {
 
   async function handleSend() {
     const content = draft.trim();
-    if (content === "" || selectedRoomId === null || tokenPair === null) {
+    if (
+      (content === "" && attachmentDrafts.length === 0) ||
+      selectedRoomId === null ||
+      tokenPair === null
+    ) {
       return;
     }
-    await sendMessageContent(content, { replyToId: replyTarget?.id ?? null });
+    setBusyAction("send");
+    setError(null);
+    try {
+      const uploadedAttachments =
+        attachmentDrafts.length === 0
+          ? []
+          : await uploadAttachmentDrafts(tokenPair.access_token, selectedRoomId, attachmentDrafts);
+      setAttachmentDrafts([]);
+      await sendMessageContent(content, {
+        replyToId: replyTarget?.id ?? null,
+        attachmentIds: uploadedAttachments.map((attachment) => attachment.id),
+        attachmentNames: uploadedAttachments.map((attachment) => attachment.filename),
+      });
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Unable to send message.");
+    } finally {
+      setBusyAction(null);
+    }
   }
 
   async function sendMessageContent(content: string, options: SendMessageOptions = {}) {
-    if (content === "" || selectedRoomId === null || tokenPair === null) {
+    const attachmentIds = options.attachmentIds ?? [];
+    if ((content === "" && attachmentIds.length === 0) || selectedRoomId === null || tokenPair === null) {
       return;
     }
     const pendingId = createLocalId();
@@ -593,6 +673,8 @@ function App() {
         sender_id: tokenPair.user.id,
         content,
         reply_to_id: options.replyToId ?? null,
+        attachment_ids: attachmentIds,
+        attachment_names: options.attachmentNames ?? [],
         created_at: new Date().toISOString(),
         delivery_status: "sending",
       };
@@ -610,7 +692,7 @@ function App() {
     }
     setError(null);
     try {
-      if (connectionState === "connected" && clientRef.current !== null) {
+      if (attachmentIds.length === 0 && connectionState === "connected" && clientRef.current !== null) {
         try {
           await clientRef.current.sendMessage(selectedRoomId, content, {
             replyToId: options.replyToId ?? undefined,
@@ -627,6 +709,7 @@ function App() {
 
       const message = await createMessage(tokenPair.access_token, selectedRoomId, content, {
         replyToId: options.replyToId,
+        attachmentIds,
       });
       setPendingMessages((current) => current.filter((item) => item.id !== activePendingId));
       setMessages((current) =>
@@ -640,6 +723,43 @@ function App() {
       );
       setError(sendError instanceof Error ? sendError.message : "Unable to send message.");
     }
+  }
+
+  async function uploadAttachmentDrafts(
+    token: string,
+    roomId: string,
+    drafts: AttachmentDraft[],
+  ): Promise<Attachment[]> {
+    const uploadedAttachments: Attachment[] = [];
+    for (const draftAttachment of drafts) {
+      const intent = await createAttachmentUploadIntent(token, roomId, draftAttachment.file);
+      if (intent.upload_url === null) {
+        throw new Error("Attachment storage is not configured.");
+      }
+      await uploadAttachmentObject(intent.upload_url, draftAttachment.file);
+      uploadedAttachments.push(
+        await confirmAttachmentUpload(token, roomId, intent.attachment.id),
+      );
+    }
+    return uploadedAttachments;
+  }
+
+  function handleAttachmentFiles(files: FileList | null) {
+    if (files === null) {
+      return;
+    }
+    const nextDrafts = [...files].map((file) => ({
+      id: createLocalId(),
+      file,
+    }));
+    setAttachmentDrafts((current) => [...current, ...nextDrafts].slice(0, 6));
+    if (fileInputRef.current !== null) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  function removeAttachmentDraft(id: string) {
+    setAttachmentDrafts((current) => current.filter((attachment) => attachment.id !== id));
   }
 
   function handleDraftChange(value: string) {
@@ -763,6 +883,26 @@ function App() {
     }
   }
 
+  async function handleDownloadAttachment(attachment: Attachment) {
+    if (tokenPair === null || selectedRoomId === null) {
+      return;
+    }
+    setError(null);
+    try {
+      const intent = await createAttachmentDownloadIntent(
+        tokenPair.access_token,
+        selectedRoomId,
+        attachment.id,
+      );
+      if (intent.download_url === null) {
+        throw new Error("Attachment download URL is unavailable.");
+      }
+      window.open(intent.download_url, "_blank", "noopener,noreferrer");
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Unable to download attachment.");
+    }
+  }
+
   function handleJumpToMessage(message: Message) {
     setSearchResults([]);
     if (!messages.some((item) => item.id === message.id)) {
@@ -793,11 +933,14 @@ function App() {
     setWorkspaces([]);
     setRooms([]);
     setMembers([]);
+    setServerUsers([]);
     setMessages([]);
     setPendingMessages([]);
+    setAttachmentDrafts([]);
     setNewSpaceName("");
     setContactEmail("");
     setInviteEmail("");
+    setProfileName("");
     setMessageSearchQuery("");
     setSearchResults([]);
     setReplyTarget(null);
@@ -882,6 +1025,37 @@ function App() {
           </button>
         </header>
 
+        <div className="profile-box">
+          <div className="profile-avatar">
+            <UserRound size={18} />
+          </div>
+          <div className="profile-fields">
+            <span>{tokenPair.user.email}</span>
+            <input
+              value={profileName}
+              aria-label="Display name"
+              onChange={(event) => setProfileName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  void handleSaveProfile();
+                }
+              }}
+            />
+          </div>
+          <button
+            className="icon-button"
+            title="Save profile"
+            disabled={
+              profileName.trim() === "" ||
+              profileName.trim() === tokenPair.user.display_name ||
+              busyAction === "profile"
+            }
+            onClick={() => void handleSaveProfile()}
+          >
+            <Check size={16} />
+          </button>
+        </div>
+
         <div className="search-box">
           <Search size={16} />
           <input
@@ -910,6 +1084,39 @@ function App() {
             <UsersRound size={16} />
             Groups
           </button>
+        </div>
+
+        <div className="people-section">
+          <div className="section-title">Server users</div>
+          {visibleServerUsers.slice(0, 8).map((user) => {
+            const status = presenceByUserId.get(user.id);
+            return (
+              <div key={user.id} className="person-entry">
+                <button
+                  className="person-main"
+                  title={user.email}
+                  onClick={() => setContactEmail(user.email)}
+                >
+                  <span className={status === undefined ? "presence-dot" : "presence-dot online"} />
+                  <span>
+                    <strong>{user.display_name}</strong>
+                    <small>{user.email}</small>
+                  </span>
+                </button>
+                <button
+                  className="icon-button"
+                  title="Add friend or open direct chat"
+                  disabled={busyAction === "add-contact"}
+                  onClick={() => void handleStartDirectMessage(user.email)}
+                >
+                  <UserPlus size={16} />
+                </button>
+              </div>
+            );
+          })}
+          {visibleServerUsers.length === 0 && (
+            <div className="empty-list">No users match this search.</div>
+          )}
         </div>
 
         <div className="room-section">
@@ -1131,6 +1338,8 @@ function App() {
                                   void sendMessageContent(message.content, {
                                     retryPendingId: message.id,
                                     replyToId: message.reply_to_id,
+                                    attachmentIds: message.attachment_ids,
+                                    attachmentNames: message.attachment_names,
                                   })
                                 }
                               >
@@ -1187,6 +1396,38 @@ function App() {
                       ) : (
                         <p>{isDeleted ? "Message deleted" : message.content}</p>
                       )}
+                      {(isPending ? message.attachment_names : message.attachments).length > 0 && (
+                        <div className="attachment-list">
+                          {isPending
+                            ? message.attachment_names.map((name) => (
+                                <div key={name} className="attachment-chip">
+                                  <Paperclip size={14} />
+                                  <span>{name}</span>
+                                </div>
+                              ))
+                            : message.attachments.map((attachment) =>
+                                attachment.content_type.startsWith("image/") ? (
+                                  <button
+                                    key={attachment.id}
+                                    className="image-attachment"
+                                    onClick={() => void handleDownloadAttachment(attachment)}
+                                  >
+                                    <Paperclip size={15} />
+                                    <span>{attachment.filename}</span>
+                                  </button>
+                                ) : (
+                                  <button
+                                    key={attachment.id}
+                                    className="attachment-chip"
+                                    onClick={() => void handleDownloadAttachment(attachment)}
+                                  >
+                                    <Download size={14} />
+                                    <span>{attachment.filename}</span>
+                                  </button>
+                                ),
+                              )}
+                        </div>
+                      )}
                       {!isPending && !isDeleted && (
                         <div className="message-actions">
                           <button title="Reply" onClick={() => setReplyTarget(message)}>
@@ -1233,6 +1474,45 @@ function App() {
                 </button>
               </div>
             )}
+            <div className="emoji-row" aria-label="Quick emoji reactions">
+              <button
+                type="button"
+                title="Attach files"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Paperclip size={16} />
+              </button>
+              {QUICK_EMOJIS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  title={`Insert ${emoji}`}
+                  onClick={() => setDraft((current) => `${current}${emoji}`)}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+            <input
+              ref={fileInputRef}
+              className="file-input"
+              type="file"
+              multiple
+              onChange={(event) => handleAttachmentFiles(event.target.files)}
+            />
+            {attachmentDrafts.length > 0 && (
+              <div className="attachment-drafts">
+                {attachmentDrafts.map((attachment) => (
+                  <div key={attachment.id} className="attachment-chip">
+                    <Paperclip size={14} />
+                    <span>{attachment.file.name}</span>
+                    <button title="Remove attachment" onClick={() => removeAttachmentDraft(attachment.id)}>
+                      <X size={13} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <textarea
               value={draft}
               placeholder={`Message ${selectedRoom.is_private ? selectedRoom.name : `#${selectedRoom.name}`}`}
@@ -1247,7 +1527,11 @@ function App() {
             <button
               className="send-button"
               onClick={() => void handleSend()}
-              disabled={draft.trim() === "" || selectedRoomId === null}
+              disabled={
+                (draft.trim() === "" && attachmentDrafts.length === 0) ||
+                selectedRoomId === null ||
+                busyAction === "send"
+              }
             >
               <Send size={18} />
             </button>
@@ -1278,7 +1562,7 @@ function App() {
               {connection.skipped.map((item) => (
                 <div key={`${item.transport}-${item.reason}`} className="fallback-row">
                   <strong>{item.transport}</strong>
-                  <span>{item.reason}</span>
+                  <span>{skippedReasonLabel(item)}</span>
                 </div>
               ))}
             </div>
@@ -1388,6 +1672,21 @@ function filterRooms(rooms: Room[], query: string): Room[] {
   return rooms.filter((room) => room.name.toLowerCase().includes(query));
 }
 
+function filterUsers(users: User[], query: string, currentUserId?: string): User[] {
+  return users.filter((user) => {
+    if (user.id === currentUserId) {
+      return false;
+    }
+    if (query === "") {
+      return true;
+    }
+    return (
+      user.display_name.toLowerCase().includes(query) ||
+      user.email.toLowerCase().includes(query)
+    );
+  });
+}
+
 function createLocalId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
@@ -1403,6 +1702,16 @@ function protocolStateLabel(state: ConnectionState): string {
     return "Offline";
   }
   return "Idle";
+}
+
+function skippedReasonLabel(item: ConnectResult["skipped"][number]): string {
+  if (item.reason.trim() !== "") {
+    return item.reason;
+  }
+  if (item.status !== undefined) {
+    return `Transport was skipped with server status ${item.status}.`;
+  }
+  return "The browser did not expose a detailed WebTransport failure reason.";
 }
 
 function formatTime(value: string) {

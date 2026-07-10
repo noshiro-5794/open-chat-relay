@@ -29,6 +29,12 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=256)
 
 
+class UserUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str = Field(min_length=1, max_length=80)
+
+
 class RefreshRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

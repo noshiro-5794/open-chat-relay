@@ -133,6 +133,51 @@ test("webtransport transport emits additional stream events", async () => {
   }
 });
 
+test("webtransport handshake failure falls back without unhandled rejection", async () => {
+  const unhandledRejections = [];
+  const onUnhandledRejection = (reason) => {
+    unhandledRejections.push(reason);
+  };
+  process.on("unhandledRejection", onUnhandledRejection);
+
+  const restore = installRuntimeMocks({
+    capabilities: capabilitiesResponse({
+      webtransport: {
+        available: true,
+        status: "available",
+        unavailable_reason: null,
+        url: "/v1/wt",
+      },
+      websocket: {
+        available: true,
+        status: "available",
+        unavailable_reason: null,
+      },
+    }),
+    webTransportClass: FailingWebTransport,
+  });
+
+  try {
+    const client = new OpenChatRelayClient("https://localhost:8000");
+    const result = await client.connect({ token: "access-token" });
+    await waitForMicrotasks();
+
+    assert.equal(result.transport, "websocket");
+    assert.deepEqual(result.attempted, ["webtransport", "websocket"]);
+    assert.deepEqual(result.skipped, [
+      {
+        transport: "webtransport",
+        status: "available",
+        reason: "Opening handshake failed.",
+      },
+    ]);
+    assert.deepEqual(unhandledRejections, []);
+  } finally {
+    restore();
+    process.off("unhandledRejection", onUnhandledRejection);
+  }
+});
+
 test("webtransport transport rejects requests on error frames", async () => {
   MockWebTransport.nextFrames = [
     {
@@ -399,6 +444,15 @@ class MockWebTransport {
     MockWebTransport.lastOptions = null;
     MockWebTransport.lastCommand = null;
     MockWebTransport.nextFrames = null;
+  }
+}
+
+class FailingWebTransport {
+  ready = Promise.reject(new Error("Opening handshake failed."));
+  closed = Promise.reject(new Error("Opening handshake failed."));
+
+  close() {
+    return undefined;
   }
 }
 

@@ -106,8 +106,24 @@ export class WebTransportCandidate implements RealtimeTransport {
     }
 
     const transport = new webTransportConstructor(this.url, this.options);
-    await transport.ready;
-    this.transport = transport;
+    const closedBeforeReady = transport.closed.then(
+      () => {
+        throw new Error("WebTransport closed before the connection became ready.");
+      },
+      (error: unknown) => {
+        throw normalizeWebTransportError(error);
+      },
+    );
+    void closedBeforeReady.catch(() => undefined);
+    void transport.ready.catch(() => undefined);
+
+    try {
+      await Promise.race([transport.ready, closedBeforeReady]);
+      this.transport = transport;
+    } catch (error) {
+      transport.close();
+      throw normalizeWebTransportError(error);
+    }
   }
 
   send(command: RealtimeCommand): void {
@@ -181,4 +197,11 @@ export class WebTransportCandidate implements RealtimeTransport {
   private emit(event: RealtimeEvent): void {
     this.eventHandler?.(event);
   }
+}
+
+function normalizeWebTransportError(error: unknown): Error {
+  if (error instanceof Error) {
+    return error;
+  }
+  return new Error("WebTransport connection failed.");
 }

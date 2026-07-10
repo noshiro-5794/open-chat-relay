@@ -72,6 +72,31 @@ export interface RoomPresence {
   users: RoomPresenceUser[];
 }
 
+export interface Attachment {
+  id: string;
+  workspace_id: string;
+  room_id: string;
+  message_id: string | null;
+  uploader_id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  storage_key: string;
+  status: string;
+  created_at: string;
+}
+
+export interface AttachmentUploadIntent {
+  attachment: Attachment;
+  upload_url: string | null;
+}
+
+export interface AttachmentDownloadIntent {
+  attachment: Attachment;
+  download_url: string | null;
+  expires_in_seconds: number;
+}
+
 export interface Message {
   id: string;
   workspace_id: string;
@@ -85,7 +110,7 @@ export interface Message {
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
-  attachments: unknown[];
+  attachments: Attachment[];
 }
 
 export class ApiError extends Error {
@@ -118,6 +143,23 @@ export function register(
 
 export function listWorkspaces(token: string): Promise<Workspace[]> {
   return request<Workspace[]>("/v1/workspaces", { token });
+}
+
+export function listUsers(token: string, query = ""): Promise<User[]> {
+  const normalizedQuery = query.trim();
+  const url =
+    normalizedQuery === ""
+      ? "/v1/users?limit=100"
+      : `/v1/users?q=${encodeURIComponent(normalizedQuery)}&limit=100`;
+  return request<User[]>(url, { token });
+}
+
+export function updateMe(token: string, displayName: string): Promise<User> {
+  return request<User>("/v1/me", {
+    method: "PATCH",
+    token,
+    body: JSON.stringify({ display_name: displayName }),
+  });
 }
 
 export function createWorkspace(token: string, name: string): Promise<Workspace> {
@@ -188,6 +230,57 @@ export function listMessages(token: string, roomId: string): Promise<Message[]> 
   return request<Message[]>(`/v1/rooms/${roomId}/messages?limit=50`, { token });
 }
 
+export function createAttachmentUploadIntent(
+  token: string,
+  roomId: string,
+  file: File,
+): Promise<AttachmentUploadIntent> {
+  return request<AttachmentUploadIntent>(`/v1/rooms/${roomId}/attachments`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({
+      filename: file.name,
+      content_type: file.type || "application/octet-stream",
+      size_bytes: file.size,
+    }),
+  });
+}
+
+export async function uploadAttachmentObject(uploadUrl: string, file: File): Promise<void> {
+  const response = await fetch(uploadUrl, {
+    method: "PUT",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+    },
+    body: file,
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, `Attachment upload failed with HTTP ${response.status}`);
+  }
+}
+
+export function confirmAttachmentUpload(
+  token: string,
+  roomId: string,
+  attachmentId: string,
+): Promise<Attachment> {
+  return request<Attachment>(`/v1/rooms/${roomId}/attachments/${attachmentId}/confirm`, {
+    method: "POST",
+    token,
+  });
+}
+
+export function createAttachmentDownloadIntent(
+  token: string,
+  roomId: string,
+  attachmentId: string,
+): Promise<AttachmentDownloadIntent> {
+  return request<AttachmentDownloadIntent>(
+    `/v1/rooms/${roomId}/attachments/${attachmentId}/download`,
+    { token },
+  );
+}
+
 export function listRoomPresence(token: string, roomId: string): Promise<RoomPresence> {
   return request<RoomPresence>(`/v1/rooms/${roomId}/presence`, { token });
 }
@@ -201,13 +294,14 @@ export function createMessage(
   token: string,
   roomId: string,
   content: string,
-  options: { replyToId?: string | null } = {},
+  options: { replyToId?: string | null; attachmentIds?: string[] } = {},
 ): Promise<Message> {
   return request<Message>(`/v1/rooms/${roomId}/messages`, {
     method: "POST",
     token,
     body: JSON.stringify({
       content,
+      ...(options.attachmentIds === undefined ? {} : { attachment_ids: options.attachmentIds }),
       ...(options.replyToId === undefined || options.replyToId === null
         ? {}
         : { reply_to_id: options.replyToId }),
@@ -266,7 +360,7 @@ export function messageFromRealtimeEvent(event: Record<string, unknown>): Messag
     created_at: eventTime,
     updated_at: eventTime,
     deleted_at: typeof data.deleted_at === "string" ? data.deleted_at : null,
-    attachments: Array.isArray(data.attachments) ? data.attachments : [],
+    attachments: Array.isArray(data.attachments) ? (data.attachments as Attachment[]) : [],
   };
 }
 

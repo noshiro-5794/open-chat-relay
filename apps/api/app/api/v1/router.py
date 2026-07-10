@@ -18,6 +18,7 @@ from app.api.v1.routes.rooms import room_router, workspace_router
 from app.api.v1.routes.sse import router as sse_router
 from app.api.v1.routes.system import router as system_router
 from app.api.v1.routes.typing import router as typing_router
+from app.api.v1.routes.users import router as users_router
 from app.api.v1.routes.webhooks import router as webhooks_router
 from app.api.v1.routes.workspaces import router as workspaces_router
 
@@ -39,6 +40,7 @@ api_router.include_router(reactions_router)
 api_router.include_router(sse_router)
 api_router.include_router(system_router)
 api_router.include_router(typing_router)
+api_router.include_router(users_router)
 api_router.include_router(webhooks_router)
 api_router.include_router(workspaces_router)
 api_router.include_router(workspace_router)
