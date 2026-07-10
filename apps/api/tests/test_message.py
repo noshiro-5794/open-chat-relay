@@ -323,6 +323,28 @@ async def test_delete_message_creates_event_and_hides_from_history(client: Async
     assert events[1]["room_event_seq"] == 2
 
 
+async def test_post_delete_message_command_matches_delete_endpoint(client: AsyncClient) -> None:
+    headers = await auth_headers(client)
+    room = await create_room(client, headers)
+    create_response = await client.post(
+        f"/v1/rooms/{room['id']}/messages",
+        json={"content": "delete over post"},
+        headers=headers,
+    )
+    message_id = create_response.json()["id"]
+
+    delete_response = await client.post(
+        f"/v1/rooms/{room['id']}/messages/{message_id}/delete",
+        headers=headers,
+    )
+    history_response = await client.get(f"/v1/rooms/{room['id']}/messages", headers=headers)
+
+    assert delete_response.status_code == 200
+    assert delete_response.json()["deleted_at"] is not None
+    assert history_response.status_code == 200
+    assert history_response.json() == []
+
+
 async def test_user_must_join_room_before_sending_messages(client: AsyncClient) -> None:
     headers = await auth_headers(client)
     room = await create_room(client, headers)

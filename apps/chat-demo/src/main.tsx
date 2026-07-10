@@ -211,8 +211,17 @@ function App() {
       if (nextWorkspaces.length === 0) {
         nextWorkspaces = [await createDemoWorkspace(token, user)];
       }
+      let preferredWorkspace = nextWorkspaces.find((workspace) => workspace.role === "owner");
+      if (preferredWorkspace === undefined) {
+        preferredWorkspace = await createDemoWorkspace(token, user);
+        nextWorkspaces = [...nextWorkspaces, preferredWorkspace];
+      }
       setWorkspaces(nextWorkspaces);
-      setSelectedWorkspaceId((current) => current ?? nextWorkspaces[0]?.id ?? null);
+      setSelectedWorkspaceId((current) =>
+        current !== null && nextWorkspaces.some((workspace) => workspace.id === current && workspace.role === "owner")
+          ? current
+          : preferredWorkspace.id,
+      );
     } catch (loadError) {
       if (loadError instanceof ApiError && loadError.status === 401) {
         expireSession();

@@ -122,6 +122,7 @@ async def update_message_endpoint(
 
 
 @router.delete("/messages/{message_id}", response_model=MessageResponse)
+@router.post("/messages/{message_id}/delete", response_model=MessageResponse)
 async def delete_message_endpoint(
     room_id: UUID,
     message_id: UUID,
