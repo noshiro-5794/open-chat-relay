@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Membership, Room, RoomMember, RoomRole, User, Workspace, WorkspaceRole
 from app.services.audit import record_audit_log
+from app.services.auth import get_user_by_email
 
 _slug_pattern = re.compile(r"[^a-z0-9]+")
 
@@ -50,6 +51,10 @@ class RoomLastOwnerError(Exception):
 
 class UserNotFoundError(Exception):
     """Raised when a user cannot be found."""
+
+
+class SelfConversationError(Exception):
+    """Raised when a user tries to start or invite themselves to a conversation."""
 
 
 class WorkspaceMembershipRequiredError(Exception):
@@ -328,6 +333,65 @@ async def create_room(
     return RoomWithRole(room=room, role=RoomRole.OWNER.value)
 
 
+async def start_direct_conversation(
+    session: AsyncSession,
+    *,
+    actor: User,
+    workspace_id: UUID,
+    target_email: str,
+) -> RoomWithRole:
+    await get_workspace_for_user(session, user=actor, workspace_id=workspace_id)
+    target = await get_user_by_email(session, target_email)
+    if target is None or not target.is_active:
+        raise UserNotFoundError
+    if target.id == actor.id:
+        raise SelfConversationError
+
+    await ensure_workspace_membership(session, workspace_id=workspace_id, user_id=target.id)
+
+    slug = direct_conversation_slug(actor.id, target.id)
+    result = await session.execute(
+        select(Room).where(Room.workspace_id == workspace_id, Room.slug == slug)
+    )
+    room = result.scalar_one_or_none()
+    if room is None:
+        room = Room(
+            workspace_id=workspace_id,
+            name=f"{actor.display_name} and {target.display_name}",
+            slug=slug,
+            is_private=True,
+        )
+        session.add(room)
+        await session.flush()
+
+    await ensure_room_membership(
+        session,
+        room_id=room.id,
+        user_id=actor.id,
+        role=RoomRole.OWNER.value,
+        keep_existing_owner=True,
+    )
+    await ensure_room_membership(
+        session,
+        room_id=room.id,
+        user_id=target.id,
+        role=RoomRole.MEMBER.value,
+        keep_existing_owner=True,
+    )
+    await record_audit_log(
+        session,
+        workspace_id=workspace_id,
+        actor_id=actor.id,
+        action="conversation.direct_started",
+        target_type="room",
+        target_id=room.id,
+        details={"target_user_id": str(target.id), "target_email": target.email},
+    )
+    await session.commit()
+    await session.refresh(room)
+    return RoomWithRole(room=room, role=RoomRole.OWNER.value)
+
+
 async def list_rooms(
     session: AsyncSession,
     *,
@@ -448,6 +512,56 @@ async def add_room_member(
         },
     )
 
+    await session.commit()
+    await session.refresh(room_member)
+    return RoomMemberWithUser(room_member=room_member, user=user)
+
+
+async def invite_room_member_by_email(
+    session: AsyncSession,
+    *,
+    actor: User,
+    room_id: UUID,
+    email: str,
+    role: str,
+) -> RoomMemberWithUser:
+    room_with_role = await get_room_for_user(session, user=actor, room_id=room_id)
+    await require_room_manager(
+        session, user=actor, room=room_with_role.room, role=room_with_role.role
+    )
+
+    user = await get_user_by_email(session, email)
+    if user is None or not user.is_active:
+        raise UserNotFoundError
+    if user.id == actor.id:
+        raise SelfConversationError
+
+    await ensure_workspace_membership(
+        session,
+        workspace_id=room_with_role.room.workspace_id,
+        user_id=user.id,
+    )
+    room_member = await ensure_room_membership(
+        session,
+        room_id=room_id,
+        user_id=user.id,
+        role=role,
+        keep_existing_owner=True,
+    )
+    await record_audit_log(
+        session,
+        workspace_id=room_with_role.room.workspace_id,
+        actor_id=actor.id,
+        action="room.member_invited",
+        target_type="room_member",
+        target_id=room_member.id,
+        details={
+            "room_id": str(room_id),
+            "user_id": str(user.id),
+            "email": user.email,
+            "role": role,
+        },
+    )
     await session.commit()
     await session.refresh(room_member)
     return RoomMemberWithUser(room_member=room_member, user=user)
@@ -668,6 +782,59 @@ async def require_room_manager(
     workspace = await get_workspace_for_user(session, user=user, workspace_id=room.workspace_id)
     if workspace.role != WorkspaceRole.OWNER.value:
         raise RoomOwnerRequiredError
+
+
+async def ensure_workspace_membership(
+    session: AsyncSession,
+    *,
+    workspace_id: UUID,
+    user_id: UUID,
+    role: str = WorkspaceRole.MEMBER.value,
+) -> Membership:
+    result = await session.execute(
+        select(Membership).where(
+            Membership.workspace_id == workspace_id,
+            Membership.user_id == user_id,
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if membership is None:
+        membership = Membership(workspace_id=workspace_id, user_id=user_id, role=role)
+        session.add(membership)
+        await session.flush()
+    return membership
+
+
+async def ensure_room_membership(
+    session: AsyncSession,
+    *,
+    room_id: UUID,
+    user_id: UUID,
+    role: str,
+    keep_existing_owner: bool = False,
+) -> RoomMember:
+    result = await session.execute(
+        select(RoomMember).where(
+            RoomMember.room_id == room_id,
+            RoomMember.user_id == user_id,
+        )
+    )
+    room_member = result.scalar_one_or_none()
+    if room_member is None:
+        room_member = RoomMember(room_id=room_id, user_id=user_id, role=role)
+        session.add(room_member)
+        await session.flush()
+        return room_member
+
+    if not (keep_existing_owner and room_member.role == RoomRole.OWNER.value):
+        room_member.role = role
+        await session.flush()
+    return room_member
+
+
+def direct_conversation_slug(actor_id: UUID, target_id: UUID) -> str:
+    first, second = sorted([actor_id.hex, target_id.hex])
+    return f"dm-{first}-{second}"
 
 
 def normalize_slug(value: str) -> str:

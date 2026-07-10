@@ -187,6 +187,18 @@ export function createRoom(
   });
 }
 
+export function startDirectConversation(
+  token: string,
+  workspaceId: string,
+  email: string,
+): Promise<Room> {
+  return request<Room>(`/v1/workspaces/${workspaceId}/rooms/direct`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ email }),
+  });
+}
+
 export function listWorkspaceMembers(token: string, workspaceId: string): Promise<WorkspaceMember[]> {
   return request<WorkspaceMember[]>(`/v1/workspaces/${workspaceId}/members`, { token });
 }
@@ -212,6 +224,18 @@ export function addRoomMember(
     method: "POST",
     token,
     body: JSON.stringify({ user_id: userId, role: "member" }),
+  });
+}
+
+export function inviteRoomMember(
+  token: string,
+  roomId: string,
+  email: string,
+): Promise<RoomMember> {
+  return request<RoomMember>(`/v1/rooms/${roomId}/invites`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ email, role: "member" }),
   });
 }
 

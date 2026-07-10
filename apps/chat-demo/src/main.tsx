@@ -38,8 +38,6 @@ import {
   type User,
   type Workspace,
   type WorkspaceMember,
-  addRoomMember,
-  addWorkspaceMember,
   confirmAttachmentUpload,
   createAttachmentDownloadIntent,
   createAttachmentUploadIntent,
@@ -49,9 +47,9 @@ import {
   deleteMessage,
   getApiBaseUrl,
   leaveRoom,
+  inviteRoomMember,
   listMessages,
   listRoomPresence,
-  listRoomMembers,
   listRooms,
   listUsers,
   listWorkspaceMembers,
@@ -61,6 +59,7 @@ import {
   register,
   searchMessages,
   setApiBaseUrl,
+  startDirectConversation,
   updateMe,
   updateMessage,
   uploadAttachmentObject,
@@ -494,20 +493,11 @@ function App() {
     setError(null);
     setBusyAction("add-contact");
     try {
-      const member = await addWorkspaceMember(tokenPair.access_token, selectedWorkspaceId, emailToAdd);
-      const existingRoom = await findDirectRoomWithMember(
+      const room = await startDirectConversation(
         tokenPair.access_token,
         selectedWorkspaceId,
-        member.user_id,
+        emailToAdd,
       );
-      if (existingRoom !== null) {
-        await refreshMembers(tokenPair.access_token, selectedWorkspaceId);
-        setSelectedRoomId(existingRoom.id);
-        setContactEmail("");
-        return;
-      }
-      const room = await createDirectRoom(tokenPair.access_token, selectedWorkspaceId, member);
-      await addRoomMember(tokenPair.access_token, room.id, member.user_id);
       await refreshMembers(tokenPair.access_token, selectedWorkspaceId);
       await refreshRooms(tokenPair.access_token, selectedWorkspaceId);
       setSelectedRoomId(room.id);
@@ -517,56 +507,6 @@ function App() {
     } finally {
       setBusyAction(null);
     }
-  }
-
-  async function findDirectRoomWithMember(
-    token: string,
-    workspaceId: string,
-    userId: string,
-  ): Promise<Room | null> {
-    const latestRooms = await listRooms(token, workspaceId);
-    setRooms(latestRooms.filter((room) => room.role !== null));
-    for (const room of latestRooms.filter((item) => item.is_private)) {
-      try {
-        const roomMembers = await listRoomMembers(token, room.id);
-        if (roomMembers.some((member) => member.user_id === userId)) {
-          return room;
-        }
-      } catch {
-        // The current user may not belong to every private room returned by the
-        // workspace list yet; skip rooms whose membership cannot be inspected.
-      }
-    }
-    return null;
-  }
-
-  async function createDirectRoom(
-    token: string,
-    workspaceId: string,
-    member: WorkspaceMember,
-  ): Promise<Room> {
-    const primaryName = `${tokenPair?.user.display_name ?? "You"} and ${member.display_name}`;
-    const stableSuffix = member.user_id.slice(0, 8);
-    const uniqueSuffix = Date.now().toString(36);
-    const candidateNames = [
-      primaryName,
-      `${member.display_name} ${stableSuffix}`,
-      `${member.display_name} ${stableSuffix} ${uniqueSuffix}`,
-    ];
-    let lastConflict: ApiError | null = null;
-
-    for (const name of candidateNames) {
-      try {
-        return await createRoom(token, workspaceId, name, { isPrivate: true });
-      } catch (createError) {
-        if (!(createError instanceof ApiError) || createError.status !== 409) {
-          throw createError;
-        }
-        lastConflict = createError;
-      }
-    }
-
-    throw lastConflict ?? new Error("Unable to create direct message.");
   }
 
   async function handleInviteMember() {
@@ -582,13 +522,13 @@ function App() {
     setError(null);
     setBusyAction("invite-member");
     try {
-      const member = await addWorkspaceMember(
+      await inviteRoomMember(
         tokenPair.access_token,
-        selectedWorkspaceId,
+        selectedRoomId,
         emailToInvite,
       );
-      await addRoomMember(tokenPair.access_token, selectedRoomId, member.user_id);
       await refreshMembers(tokenPair.access_token, selectedWorkspaceId);
+      await refreshRooms(tokenPair.access_token, selectedWorkspaceId);
       setInviteEmail("");
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : "Unable to invite member.");
@@ -1065,160 +1005,191 @@ function App() {
           />
         </div>
 
-        <div className="sidebar-nav">
-          <button className={chatView === "home" ? "active" : ""} onClick={() => setChatView("home")}>
-            <Home size={16} />
-            Home
-          </button>
-          <button
-            className={chatView === "friends" ? "active" : ""}
-            onClick={() => setChatView("friends")}
-          >
-            <UserRound size={16} />
-            Friends
-          </button>
-          <button
-            className={chatView === "groups" ? "active" : ""}
-            onClick={() => setChatView("groups")}
-          >
-            <UsersRound size={16} />
-            Groups
-          </button>
-        </div>
+        <div className="sidebar-scroll">
+          <nav className="sidebar-nav" aria-label="Chat sections">
+            <button className={chatView === "home" ? "active" : ""} onClick={() => setChatView("home")}>
+              <Home size={16} />
+              <span>Home</span>
+              <small>{rooms.length}</small>
+            </button>
+            <button
+              className={chatView === "friends" ? "active" : ""}
+              onClick={() => setChatView("friends")}
+            >
+              <UserRound size={16} />
+              <span>Friends</span>
+              <small>{directRooms.length}</small>
+            </button>
+            <button
+              className={chatView === "groups" ? "active" : ""}
+              onClick={() => setChatView("groups")}
+            >
+              <UsersRound size={16} />
+              <span>Groups</span>
+              <small>{spaceRooms.length}</small>
+            </button>
+          </nav>
 
-        <div className="people-section">
-          <div className="section-title">Server users</div>
-          {visibleServerUsers.slice(0, 8).map((user) => {
-            const status = presenceByUserId.get(user.id);
-            return (
-              <div key={user.id} className="person-entry">
+          <section className="sidebar-group room-section">
+            <div className="group-heading">
+              <span>
+                {chatView === "home" ? "Recent" : chatView === "friends" ? "Direct messages" : "Spaces"}
+              </span>
+              <small>
+                {chatView === "home"
+                  ? visibleHomeRooms.length
+                  : chatView === "friends"
+                    ? visibleDirectRooms.length
+                    : visibleSpaceRooms.length}
+              </small>
+            </div>
+            {(chatView === "home"
+              ? visibleHomeRooms
+              : chatView === "friends"
+                ? visibleDirectRooms
+                : visibleSpaceRooms
+            ).map((room) => (
+              <div key={room.id} className={room.id === selectedRoomId ? "room-row active" : "room-row"}>
                 <button
-                  className="person-main"
-                  title={user.email}
-                  onClick={() => setContactEmail(user.email)}
+                  className={room.id === selectedRoomId ? "room active" : "room"}
+                  onClick={() => setSelectedRoomId(room.id)}
                 >
-                  <span className={status === undefined ? "presence-dot" : "presence-dot online"} />
-                  <span>
-                    <strong>{user.display_name}</strong>
-                    <small>{user.email}</small>
-                  </span>
+                  {room.is_private ? <UserRound size={16} /> : <Hash size={16} />}
+                  <span>{room.name}</span>
                 </button>
                 <button
-                  className="icon-button"
-                  title="Add friend or open direct chat"
-                  disabled={busyAction === "add-contact"}
-                  onClick={() => void handleStartDirectMessage(user.email)}
+                  className="icon-button room-delete"
+                  title={`Delete ${room.is_private ? "friend chat" : "group"}`}
+                  disabled={busyAction === `leave-${room.id}`}
+                  onClick={() => void handleDeleteConversation(room)}
                 >
-                  <UserPlus size={16} />
+                  <Trash2 size={15} />
                 </button>
               </div>
-            );
-          })}
-          {visibleServerUsers.length === 0 && (
-            <div className="empty-list">No users match this search.</div>
-          )}
-        </div>
+            ))}
+            {chatView === "home" && visibleHomeRooms.length === 0 && (
+              <div className="empty-list">Your recent chats will appear here.</div>
+            )}
+            {chatView === "friends" && directRooms.length === 0 && (
+              <div className="empty-list">Add a friend to start chatting.</div>
+            )}
+            {chatView === "groups" && spaceRooms.length === 0 && (
+              <div className="empty-list">Create a group to start collaborating.</div>
+            )}
+          </section>
 
-        <div className="room-section">
-          <div className="section-title">
-            {chatView === "home" ? "Recent chats" : chatView === "friends" ? "Friends" : "Groups"}
-          </div>
-          {(chatView === "home"
-            ? visibleHomeRooms
-            : chatView === "friends"
-              ? visibleDirectRooms
-              : visibleSpaceRooms
-          ).map((room) => (
-            <div key={room.id} className={room.id === selectedRoomId ? "room-row active" : "room-row"}>
-              <button
-                className={room.id === selectedRoomId ? "room active" : "room"}
-                onClick={() => setSelectedRoomId(room.id)}
-              >
-                {room.is_private ? <UserRound size={16} /> : <Hash size={16} />}
-                {room.name}
-              </button>
-              <button
-                className="icon-button room-delete"
-                title={`Delete ${room.is_private ? "friend chat" : "group"}`}
-                disabled={busyAction === `leave-${room.id}`}
-                onClick={() => void handleDeleteConversation(room)}
-              >
-                <Trash2 size={15} />
-              </button>
+          <section className="sidebar-group compose-section">
+            <div className="group-heading">
+              <span>Start</span>
             </div>
-          ))}
-          {chatView === "friends" && directRooms.length === 0 && (
-            <div className="empty-list">Add a friend to start chatting.</div>
+            {(chatView === "home" || chatView === "friends") && (
+              <div className="new-room">
+                <input
+                  placeholder="Add contact by email"
+                  value={contactEmail}
+                  onChange={(event) => setContactEmail(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      void handleStartDirectMessage();
+                    }
+                  }}
+                />
+                <button
+                  className="icon-button"
+                  title="Start direct message"
+                  disabled={busyAction === "add-contact" || contactEmail.trim() === ""}
+                  onClick={() => void handleStartDirectMessage()}
+                >
+                  <UserPlus size={18} />
+                </button>
+              </div>
+            )}
+
+            {(chatView === "home" || chatView === "groups") && (
+              <div className="new-room">
+                <input
+                  placeholder="New group"
+                  value={newSpaceName}
+                  onChange={(event) => setNewSpaceName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      void handleCreateSpace();
+                    }
+                  }}
+                />
+                <button
+                  className="icon-button"
+                  title="Create group"
+                  disabled={busyAction === "create-group" || newSpaceName.trim() === ""}
+                  onClick={() => void handleCreateSpace()}
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
+            )}
+
+            {selectedRoom !== undefined && !selectedRoom.is_private && (
+              <div className="new-room group-member-entry">
+                <input
+                  value={inviteEmail}
+                  placeholder="Add member to selected group"
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      void handleInviteMember();
+                    }
+                  }}
+                />
+                <button
+                  className="icon-button"
+                  title="Add member to selected group"
+                  disabled={busyAction === "invite-member" || inviteEmail.trim() === ""}
+                  onClick={() => void handleInviteMember()}
+                >
+                  <UserPlus size={18} />
+                </button>
+              </div>
+            )}
+          </section>
+
+          {(chatView === "home" || chatView === "friends") && (
+            <section className="sidebar-group people-section">
+              <div className="group-heading">
+                <span>People</span>
+                <small>{visibleServerUsers.length}</small>
+              </div>
+              {visibleServerUsers.slice(0, 10).map((user) => {
+                const status = presenceByUserId.get(user.id);
+                return (
+                  <div key={user.id} className="person-entry">
+                    <button
+                      className="person-main"
+                      title={user.email}
+                      onClick={() => setContactEmail(user.email)}
+                    >
+                      <span className={status === undefined ? "presence-dot" : "presence-dot online"} />
+                      <span>
+                        <strong>{user.display_name}</strong>
+                        <small>{user.email}</small>
+                      </span>
+                    </button>
+                    <button
+                      className="icon-button"
+                      title="Add friend or open direct chat"
+                      disabled={busyAction === "add-contact"}
+                      onClick={() => void handleStartDirectMessage(user.email)}
+                    >
+                      <UserPlus size={16} />
+                    </button>
+                  </div>
+                );
+              })}
+              {visibleServerUsers.length === 0 && (
+                <div className="empty-list">No users match this search.</div>
+              )}
+            </section>
           )}
-          {chatView === "groups" && spaceRooms.length === 0 && (
-            <div className="empty-list">Create a group to start collaborating.</div>
-          )}
         </div>
-
-        <div className="new-room contact-entry">
-          <input
-            placeholder="Add contact by email"
-            value={contactEmail}
-            onChange={(event) => setContactEmail(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                void handleStartDirectMessage();
-              }
-            }}
-          />
-          <button
-            className="icon-button"
-            title="Start direct message"
-            disabled={busyAction === "add-contact" || contactEmail.trim() === ""}
-            onClick={() => void handleStartDirectMessage()}
-          >
-            <UserPlus size={18} />
-          </button>
-        </div>
-
-        <div className="new-room">
-          <input
-            placeholder="New group"
-            value={newSpaceName}
-            onChange={(event) => setNewSpaceName(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                void handleCreateSpace();
-              }
-            }}
-          />
-          <button
-            className="icon-button"
-            title="Create group"
-            disabled={busyAction === "create-group" || newSpaceName.trim() === ""}
-            onClick={() => void handleCreateSpace()}
-          >
-            <Plus size={18} />
-          </button>
-        </div>
-
-        {selectedRoom !== undefined && !selectedRoom.is_private && (
-          <div className="new-room group-member-entry">
-            <input
-              value={inviteEmail}
-              placeholder="Add member to group"
-              onChange={(event) => setInviteEmail(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  void handleInviteMember();
-                }
-              }}
-            />
-            <button
-              className="icon-button"
-              title="Add member to selected group"
-              disabled={busyAction === "invite-member" || inviteEmail.trim() === ""}
-              onClick={() => void handleInviteMember()}
-            >
-              <UserPlus size={18} />
-            </button>
-          </div>
-        )}
       </aside>
 
       <section className="conversation">

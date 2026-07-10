@@ -4,9 +4,11 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.api.deps import CurrentUserDep, DbSessionDep
 from app.schemas.workspace import (
+    DirectConversationCreateRequest,
     MembershipStatusResponse,
     RoomCreateRequest,
     RoomMemberAddRequest,
+    RoomMemberInviteRequest,
     RoomMemberResponse,
     RoomMemberUpdateRequest,
     RoomResponse,
@@ -18,6 +20,7 @@ from app.services.workspace import (
     RoomNotFoundError,
     RoomOwnerRequiredError,
     RoomWithRole,
+    SelfConversationError,
     SlugAlreadyExistsError,
     UserNotFoundError,
     WorkspaceMembershipRequiredError,
@@ -25,11 +28,13 @@ from app.services.workspace import (
     add_room_member,
     create_room,
     get_room_for_user,
+    invite_room_member_by_email,
     join_room,
     leave_room,
     list_room_members,
     list_rooms,
     remove_room_member,
+    start_direct_conversation,
     update_room_member_role,
 )
 
@@ -82,6 +87,43 @@ async def list_rooms_endpoint(
         ) from exc
 
     return [room_response(room) for room in rooms]
+
+
+@workspace_router.post(
+    "/direct",
+    response_model=RoomResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_direct_conversation_endpoint(
+    workspace_id: UUID,
+    payload: DirectConversationCreateRequest,
+    session: DbSessionDep,
+    current_user: CurrentUserDep,
+) -> RoomResponse:
+    try:
+        room = await start_direct_conversation(
+            session,
+            actor=current_user,
+            workspace_id=workspace_id,
+            target_email=payload.email,
+        )
+    except WorkspaceNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found.",
+        ) from exc
+    except UserNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found.",
+        ) from exc
+    except SelfConversationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You cannot start a direct conversation with yourself.",
+        ) from exc
+
+    return room_response(room)
 
 
 @room_router.get("/{room_id}", response_model=RoomResponse)
@@ -192,6 +234,47 @@ async def add_room_member_endpoint(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only room owners or workspace owners can manage room members.",
+        ) from exc
+
+    return room_member_response(member)
+
+
+@room_router.post(
+    "/{room_id}/invites",
+    response_model=RoomMemberResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def invite_room_member_endpoint(
+    room_id: UUID,
+    payload: RoomMemberInviteRequest,
+    session: DbSessionDep,
+    current_user: CurrentUserDep,
+) -> RoomMemberResponse:
+    try:
+        member = await invite_room_member_by_email(
+            session,
+            actor=current_user,
+            room_id=room_id,
+            email=payload.email,
+            role=payload.role,
+        )
+    except RoomNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Room not found."
+        ) from exc
+    except UserNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found."
+        ) from exc
+    except SelfConversationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You are already in this conversation.",
+        ) from exc
+    except RoomOwnerRequiredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only room owners or workspace owners can invite room members.",
         ) from exc
 
     return room_member_response(member)

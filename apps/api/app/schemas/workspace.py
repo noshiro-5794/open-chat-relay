@@ -59,6 +59,19 @@ class RoomMemberAddRequest(BaseModel):
     role: Literal["owner", "member"] = "member"
 
 
+class DirectConversationCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=320)
+
+
+class RoomMemberInviteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    email: str = Field(min_length=3, max_length=320)
+    role: Literal["owner", "member"] = "member"
+
+
 class RoomMemberUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
