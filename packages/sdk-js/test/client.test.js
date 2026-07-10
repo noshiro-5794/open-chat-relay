@@ -178,6 +178,46 @@ test("webtransport handshake failure falls back without unhandled rejection", as
   }
 });
 
+test("webtransport pending connection times out and falls back", async () => {
+  const restore = installRuntimeMocks({
+    capabilities: capabilitiesResponse({
+      webtransport: {
+        available: true,
+        status: "available",
+        unavailable_reason: null,
+        url: "/v1/wt",
+      },
+      websocket: {
+        available: true,
+        status: "available",
+        unavailable_reason: null,
+      },
+    }),
+    webTransportClass: HangingWebTransport,
+  });
+
+  try {
+    const client = new OpenChatRelayClient("https://localhost:8000", {
+      connectTimeoutMs: 10,
+    });
+    const result = await client.connect({ token: "access-token" });
+
+    assert.equal(result.transport, "websocket");
+    assert.deepEqual(result.attempted, ["webtransport", "websocket"]);
+    assert.deepEqual(result.skipped, [
+      {
+        transport: "webtransport",
+        status: "available",
+        reason: "webtransport connection timed out after 10ms.",
+      },
+    ]);
+    assert.equal(HangingWebTransport.closedByClient, true);
+  } finally {
+    restore();
+    HangingWebTransport.reset();
+  }
+});
+
 test("webtransport transport rejects requests on error frames", async () => {
   MockWebTransport.nextFrames = [
     {
@@ -453,6 +493,21 @@ class FailingWebTransport {
 
   close() {
     return undefined;
+  }
+}
+
+class HangingWebTransport {
+  static closedByClient = false;
+
+  ready = new Promise(() => undefined);
+  closed = new Promise(() => undefined);
+
+  close() {
+    HangingWebTransport.closedByClient = true;
+  }
+
+  static reset() {
+    HangingWebTransport.closedByClient = false;
   }
 }
 

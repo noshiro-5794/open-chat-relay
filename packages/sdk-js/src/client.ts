@@ -27,6 +27,7 @@ import type {
 } from "./types.js";
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 10_000;
+const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
 
 interface PendingRequest {
   resolve: (event: AckEvent) => void;
@@ -39,6 +40,7 @@ export class OpenChatRelayClient {
   private readonly eventHandlers = new Set<(event: RealtimeEvent) => void>();
   private readonly pendingRequests = new Map<string, PendingRequest>();
   private readonly requestTimeoutMs: number;
+  private readonly connectTimeoutMs: number;
   private readonly requestIdFactory: () => string;
   private readonly webTransportOptions: WebTransportOptions | undefined;
 
@@ -47,6 +49,7 @@ export class OpenChatRelayClient {
     options: ClientOptions = {},
   ) {
     this.requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+    this.connectTimeoutMs = options.connectTimeoutMs ?? DEFAULT_CONNECT_TIMEOUT_MS;
     this.requestIdFactory = options.requestIdFactory ?? createRequestId;
     this.webTransportOptions = options.webTransportOptions;
   }
@@ -128,7 +131,11 @@ export class OpenChatRelayClient {
 
       try {
         candidate.onEvent((event) => this.handleTransportEvent(event));
-        await candidate.connect();
+        await withTimeout(
+          candidate.connect(),
+          this.connectTimeoutMs,
+          `${candidate.name} connection timed out after ${this.connectTimeoutMs}ms.`,
+        );
         this.transport = candidate;
         return { transport: candidate.name, attempted, skipped };
       } catch (error) {
@@ -355,6 +362,23 @@ function createRequestId(): string {
     return globalThis.crypto.randomUUID();
   }
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  if (timeoutMs <= 0) {
+    return promise;
+  }
+
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const timeoutPromise = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error(message)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+  });
 }
 
 function isAckEvent(event: RealtimeEvent): event is AckEvent {

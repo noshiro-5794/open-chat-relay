@@ -85,6 +85,7 @@ export interface ConnectResult {
 
 export interface ClientOptions {
   requestTimeoutMs?: number;
+  connectTimeoutMs?: number;
   requestIdFactory?: () => string;
   webTransportOptions?: WebTransportOptions;
 }

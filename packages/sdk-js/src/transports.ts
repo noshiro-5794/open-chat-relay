@@ -106,6 +106,7 @@ export class WebTransportCandidate implements RealtimeTransport {
     }
 
     const transport = new webTransportConstructor(this.url, this.options);
+    this.transport = transport;
     const closedBeforeReady = transport.closed.then(
       () => {
         throw new Error("WebTransport closed before the connection became ready.");
@@ -119,8 +120,8 @@ export class WebTransportCandidate implements RealtimeTransport {
 
     try {
       await Promise.race([transport.ready, closedBeforeReady]);
-      this.transport = transport;
     } catch (error) {
+      this.transport = null;
       transport.close();
       throw normalizeWebTransportError(error);
     }
