@@ -96,6 +96,39 @@ async def test_direct_conversation_adds_both_users_to_same_room(
     assert repeated_response.json()["id"] == direct_room["id"]
 
 
+async def test_one_sided_private_room_is_hidden_from_room_list(client: AsyncClient) -> None:
+    alice_headers = await auth_headers(
+        client,
+        email="alice-stale-direct@example.com",
+        display_name="Alice",
+    )
+    bob_headers = await auth_headers(
+        client,
+        email="bob-stale-direct@example.com",
+        display_name="Bob",
+    )
+    workspace = await create_workspace(client, alice_headers)
+    direct_response = await client.post(
+        f"/v1/workspaces/{workspace['id']}/rooms/direct",
+        json={"email": "bob-stale-direct@example.com"},
+        headers=alice_headers,
+    )
+    direct_room = direct_response.json()
+
+    leave_response = await client.post(
+        f"/v1/rooms/{direct_room['id']}/leave",
+        headers=alice_headers,
+    )
+    assert leave_response.status_code == 200
+
+    bob_rooms_response = await client.get(
+        f"/v1/workspaces/{workspace['id']}/rooms",
+        headers=bob_headers,
+    )
+    assert bob_rooms_response.status_code == 200
+    assert all(room["id"] != direct_room["id"] for room in bob_rooms_response.json())
+
+
 async def test_room_invite_adds_user_to_workspace_and_group(
     client: AsyncClient,
 ) -> None:

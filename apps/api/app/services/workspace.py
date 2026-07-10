@@ -2,7 +2,7 @@ import re
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -400,13 +400,28 @@ async def list_rooms(
 ) -> list[RoomWithRole]:
     await get_workspace_for_user(session, user=user, workspace_id=workspace_id)
 
+    room_member_counts = (
+        select(
+            RoomMember.room_id.label("room_id"),
+            func.count(RoomMember.id).label("member_count"),
+        )
+        .group_by(RoomMember.room_id)
+        .subquery()
+    )
     statement = (
         select(Room, RoomMember.role)
         .outerjoin(
             RoomMember,
             (RoomMember.room_id == Room.id) & (RoomMember.user_id == user.id),
         )
+        .outerjoin(room_member_counts, room_member_counts.c.room_id == Room.id)
         .where(Room.workspace_id == workspace_id)
+        .where(
+            or_(
+                Room.is_private.is_(False),
+                func.coalesce(room_member_counts.c.member_count, 0) > 1,
+            )
+        )
         .order_by(Room.created_at)
     )
     result = await session.execute(statement)

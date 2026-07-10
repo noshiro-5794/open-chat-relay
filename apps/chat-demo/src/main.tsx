@@ -149,6 +149,7 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId);
+  const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
   const directRooms = rooms.filter((room) => room.is_private);
   const spaceRooms = rooms.filter((room) => !room.is_private);
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -244,7 +245,7 @@ function App() {
       }
       setWorkspaces(nextWorkspaces);
       setSelectedWorkspaceId((current) =>
-        current !== null && nextWorkspaces.some((workspace) => workspace.id === current && workspace.role === "owner")
+        current !== null && nextWorkspaces.some((workspace) => workspace.id === current)
           ? current
           : preferredWorkspace.id,
       );
@@ -994,6 +995,25 @@ function App() {
           >
             <Check size={16} />
           </button>
+        </div>
+
+        <div className="workspace-switcher">
+          <label>
+            <span>Workspace</span>
+            <select
+              value={selectedWorkspaceId ?? ""}
+              onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+            >
+              {workspaces.map((workspace) => (
+                <option key={workspace.id} value={workspace.id}>
+                  {workspace.name} · {workspace.role}
+                </option>
+              ))}
+            </select>
+          </label>
+          {selectedWorkspace !== undefined && (
+            <small title={selectedWorkspace.id}>{selectedWorkspace.slug}</small>
+          )}
         </div>
 
         <div className="search-box">
