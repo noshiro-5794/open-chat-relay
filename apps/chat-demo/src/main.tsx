@@ -35,34 +35,31 @@ import {
   type Friend,
   type Message,
   type Room,
+  type RoomMember,
   type TokenPair,
   type User,
-  type Workspace,
-  type WorkspaceMember,
   addFriend,
   confirmAttachmentUpload,
   createAttachmentDownloadIntent,
   createAttachmentUploadIntent,
+  createGroupConversation,
   createMessage,
-  createRoom,
-  createWorkspace,
   deleteMessage,
   getApiBaseUrl,
   leaveRoom,
   inviteRoomMember,
+  listConversations,
   listFriends,
   listMessages,
   listRoomPresence,
-  listRooms,
+  listRoomMembers,
   listUsers,
-  listWorkspaceMembers,
-  listWorkspaces,
   login,
   messageFromRealtimeEvent,
   register,
   searchMessages,
   setApiBaseUrl,
-  startDirectConversation,
+  startGlobalDirectConversation,
   updateMe,
   updateMessage,
   uploadAttachmentObject,
@@ -118,12 +115,10 @@ function App() {
   const [password, setPassword] = useState("correct horse battery staple");
   const [displayName, setDisplayName] = useState("Demo User");
   const [tokenPair, setTokenPair] = useState<TokenPair | null>(() => loadSession());
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [members, setMembers] = useState<RoomMember[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [serverUsers, setServerUsers] = useState<User[]>([]);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingMessages, setPendingMessages] = useState<PendingMessage[]>([]);
@@ -153,7 +148,6 @@ function App() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const selectedRoom = rooms.find((room) => room.id === selectedRoomId);
-  const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedWorkspaceId);
   const directRooms = rooms.filter((room) => room.is_private);
   const spaceRooms = rooms.filter((room) => !room.is_private);
   const normalizedSearch = searchQuery.trim().toLowerCase();
@@ -175,18 +169,10 @@ function App() {
       return;
     }
     setProfileName(tokenPair.user.display_name);
-    void loadSpaces(tokenPair.access_token, tokenPair.user);
+    void refreshConversations(tokenPair.access_token);
     void refreshFriends(tokenPair.access_token);
     void refreshUsers(tokenPair.access_token);
   }, [tokenPair]);
-
-  useEffect(() => {
-    if (tokenPair === null || selectedWorkspaceId === null) {
-      return;
-    }
-    void refreshRooms(tokenPair.access_token, selectedWorkspaceId);
-    void refreshMembers(tokenPair.access_token, selectedWorkspaceId);
-  }, [selectedWorkspaceId, tokenPair]);
 
   useEffect(() => {
     if (tokenPair === null || selectedRoomId === null) {
@@ -237,69 +223,23 @@ function App() {
     }
   }
 
-  async function loadSpaces(token: string, user: TokenPair["user"]) {
+  async function refreshConversations(token: string) {
     setError(null);
     try {
-      let nextWorkspaces = await listWorkspaces(token);
-      if (nextWorkspaces.length === 0) {
-        nextWorkspaces = [await createDemoWorkspace(token, user)];
-      }
-      let preferredWorkspace = nextWorkspaces.find((workspace) => workspace.role === "owner");
-      if (preferredWorkspace === undefined) {
-        preferredWorkspace = await createDemoWorkspace(token, user);
-        nextWorkspaces = [...nextWorkspaces, preferredWorkspace];
-      }
-      setWorkspaces(nextWorkspaces);
-      setSelectedWorkspaceId((current) =>
-        current !== null && nextWorkspaces.some((workspace) => workspace.id === current)
+      const response = await listConversations(token);
+      const nextRooms = response.conversations;
+      setRooms(nextRooms);
+      setSelectedRoomId((current) =>
+        current !== null && nextRooms.some((room) => room.id === current)
           ? current
-          : preferredWorkspace.id,
+          : response.selected_conversation_id ?? nextRooms[0]?.id ?? null,
       );
     } catch (loadError) {
       if (loadError instanceof ApiError && loadError.status === 401) {
         expireSession();
         return;
       }
-      setError(loadError instanceof Error ? loadError.message : "Unable to load workspaces.");
-    }
-  }
-
-  async function createDemoWorkspace(token: string, user: TokenPair["user"]): Promise<Workspace> {
-    const baseName = `${user.display_name || "Demo User"} Workspace`;
-    try {
-      return await createWorkspace(token, baseName);
-    } catch (createError) {
-      if (!(createError instanceof ApiError) || createError.status !== 409) {
-        throw createError;
-      }
-    }
-
-    return createWorkspace(token, `OpenChatRelay Demo ${user.id.slice(0, 8)}`);
-  }
-
-  async function refreshRooms(token: string, workspaceId: string) {
-    setError(null);
-    try {
-      let nextRooms = (await listRooms(token, workspaceId)).filter((room) => room.role !== null);
-      if (nextRooms.length === 0) {
-        nextRooms = [await createRoom(token, workspaceId, "General")];
-      }
-      setRooms(nextRooms);
-      setSelectedRoomId((current) =>
-        current !== null && nextRooms.some((room) => room.id === current)
-          ? current
-          : nextRooms[0]?.id ?? null,
-      );
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Unable to load rooms.");
-    }
-  }
-
-  async function refreshMembers(token: string, workspaceId: string) {
-    try {
-      setMembers(await listWorkspaceMembers(token, workspaceId));
-    } catch {
-      setMembers([]);
+      setError(loadError instanceof Error ? loadError.message : "Unable to load conversations.");
     }
   }
 
@@ -364,6 +304,7 @@ function App() {
         return;
       }
       setMessages(history);
+      setMembers(await listRoomMembers(token, roomId));
 
       const client = new OpenChatRelayClient(apiUrl);
       openingClient = client;
@@ -479,14 +420,14 @@ function App() {
   }
 
   async function handleCreateSpace() {
-    if (tokenPair === null || selectedWorkspaceId === null || newSpaceName.trim() === "") {
+    if (tokenPair === null || newSpaceName.trim() === "") {
       return;
     }
     setError(null);
     setBusyAction("create-group");
     try {
-      const room = await createRoom(tokenPair.access_token, selectedWorkspaceId, newSpaceName.trim());
-      await refreshRooms(tokenPair.access_token, selectedWorkspaceId);
+      const room = await createGroupConversation(tokenPair.access_token, newSpaceName.trim());
+      await refreshConversations(tokenPair.access_token);
       setSelectedRoomId(room.id);
       setNewSpaceName("");
     } catch (createError) {
@@ -498,7 +439,7 @@ function App() {
 
   async function handleStartDirectMessage(emailOverride?: string) {
     const emailToAdd = (emailOverride ?? contactEmail).trim();
-    if (tokenPair === null || selectedWorkspaceId === null || emailToAdd === "") {
+    if (tokenPair === null || emailToAdd === "") {
       return;
     }
     if (emailToAdd.toLowerCase() === tokenPair.user.email.toLowerCase()) {
@@ -509,14 +450,12 @@ function App() {
     setBusyAction("add-contact");
     try {
       await addFriend(tokenPair.access_token, emailToAdd);
-      const room = await startDirectConversation(
+      const room = await startGlobalDirectConversation(
         tokenPair.access_token,
-        selectedWorkspaceId,
         emailToAdd,
       );
       await refreshFriends(tokenPair.access_token);
-      await refreshMembers(tokenPair.access_token, selectedWorkspaceId);
-      await refreshRooms(tokenPair.access_token, selectedWorkspaceId);
+      await refreshConversations(tokenPair.access_token);
       setSelectedRoomId(room.id);
       setContactEmail("");
     } catch (createError) {
@@ -530,7 +469,6 @@ function App() {
     const emailToInvite = inviteEmail.trim();
     if (
       tokenPair === null ||
-      selectedWorkspaceId === null ||
       selectedRoomId === null ||
       emailToInvite === ""
     ) {
@@ -544,8 +482,8 @@ function App() {
         selectedRoomId,
         emailToInvite,
       );
-      await refreshMembers(tokenPair.access_token, selectedWorkspaceId);
-      await refreshRooms(tokenPair.access_token, selectedWorkspaceId);
+      await refreshConversations(tokenPair.access_token);
+      setMembers(await listRoomMembers(tokenPair.access_token, selectedRoomId));
       setInviteEmail("");
     } catch (inviteError) {
       setError(inviteError instanceof Error ? inviteError.message : "Unable to invite member.");
@@ -555,7 +493,7 @@ function App() {
   }
 
   async function handleDeleteConversation(room: Room) {
-    if (tokenPair === null || selectedWorkspaceId === null) {
+    if (tokenPair === null) {
       return;
     }
     const conversationType = room.is_private ? "friend chat" : "group";
@@ -579,7 +517,7 @@ function App() {
         setEditingDraft("");
         setSearchResults([]);
       }
-      await refreshRooms(tokenPair.access_token, selectedWorkspaceId);
+      await refreshConversations(tokenPair.access_token);
     } catch (leaveError) {
       setError(leaveError instanceof Error ? leaveError.message : "Unable to delete conversation.");
     } finally {
@@ -736,16 +674,16 @@ function App() {
   }
 
   async function handleRefreshChat() {
-    if (tokenPair === null || selectedWorkspaceId === null) {
+    if (tokenPair === null) {
       return;
     }
     setBusyAction("refresh");
     setError(null);
     try {
-      await refreshMembers(tokenPair.access_token, selectedWorkspaceId);
-      await refreshRooms(tokenPair.access_token, selectedWorkspaceId);
+      await refreshConversations(tokenPair.access_token);
       if (selectedRoomId !== null) {
         setMessages(await listMessages(tokenPair.access_token, selectedRoomId));
+        setMembers(await listRoomMembers(tokenPair.access_token, selectedRoomId));
         await refreshPresence(tokenPair.access_token, selectedRoomId);
       }
     } catch (refreshError) {
@@ -887,7 +825,6 @@ function App() {
     localStorage.removeItem(TOKEN_STORAGE_KEY);
     localStorage.removeItem(USER_STORAGE_KEY);
     setTokenPair(null);
-    setWorkspaces([]);
     setRooms([]);
     setMembers([]);
     setFriends([]);
@@ -905,7 +842,6 @@ function App() {
     setEditingMessageId(null);
     setEditingDraft("");
     setSelectedRoomId(null);
-    setSelectedWorkspaceId(null);
     setConnectionState("idle");
     setError(null);
   }
@@ -1014,30 +950,11 @@ function App() {
           </button>
         </div>
 
-        <div className="workspace-switcher">
-          <label>
-            <span>Workspace</span>
-            <select
-              value={selectedWorkspaceId ?? ""}
-              onChange={(event) => setSelectedWorkspaceId(event.target.value)}
-            >
-              {workspaces.map((workspace) => (
-                <option key={workspace.id} value={workspace.id}>
-                  {workspace.name} · {workspace.role}
-                </option>
-              ))}
-            </select>
-          </label>
-          {selectedWorkspace !== undefined && (
-            <small title={selectedWorkspace.id}>{selectedWorkspace.slug}</small>
-          )}
-        </div>
-
         <div className="search-box">
           <Search size={16} />
           <input
             value={searchQuery}
-            placeholder="Find people and spaces"
+            placeholder="Find people and groups"
             onChange={(event) => setSearchQuery(event.target.value)}
           />
         </div>
@@ -1070,7 +987,7 @@ function App() {
           <section className="sidebar-group room-section">
             <div className="group-heading">
               <span>
-                {chatView === "home" ? "Recent" : chatView === "friends" ? "Direct messages" : "Spaces"}
+                {chatView === "home" ? "Recent" : chatView === "friends" ? "Direct messages" : "Groups"}
               </span>
               <small>
                 {chatView === "home"
@@ -1647,7 +1564,7 @@ function isPendingMessage(message: RenderMessage): message is PendingMessage {
 function senderName(
   message: RenderMessage,
   currentUser: TokenPair["user"],
-  members: WorkspaceMember[],
+  members: RoomMember[],
 ): string {
   if (message.sender_id === currentUser.id) {
     return currentUser.display_name || "You";
@@ -1656,7 +1573,7 @@ function senderName(
   return member?.display_name ?? "Unknown";
 }
 
-function typingLabel(userIds: string[], members: WorkspaceMember[]): string {
+function typingLabel(userIds: string[], members: RoomMember[]): string {
   const names = userIds.map((userId) => {
     const member = members.find((item) => item.user_id === userId);
     return member?.display_name ?? "Someone";

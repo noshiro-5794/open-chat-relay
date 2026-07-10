@@ -80,6 +80,11 @@ export interface Friend {
   created_at: string;
 }
 
+export interface ConversationList {
+  conversations: Room[];
+  selected_conversation_id: string | null;
+}
+
 export interface Attachment {
   id: string;
   workspace_id: string;
@@ -211,6 +216,33 @@ export function createRoom(
     method: "POST",
     token,
     body: JSON.stringify({ name, is_private: options.isPrivate ?? false }),
+  });
+}
+
+export function listConversations(token: string): Promise<ConversationList> {
+  return request<ConversationList>("/v1/conversations", { token });
+}
+
+export function startGlobalDirectConversation(
+  token: string,
+  email: string,
+): Promise<Room> {
+  return request<Room>("/v1/conversations/direct", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function createGroupConversation(
+  token: string,
+  name: string,
+  memberEmails: string[] = [],
+): Promise<Room> {
+  return request<Room>("/v1/conversations/groups", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ name, member_emails: memberEmails }),
   });
 }
 
