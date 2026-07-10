@@ -78,6 +78,23 @@ async def test_global_direct_conversation_is_visible_to_both_users(
         "hello from alice"
     ]
 
+    bob_reply_response = await client.post(
+        f"/v1/rooms/{room['id']}/messages",
+        json={"content": "hello from bob"},
+        headers=bob_headers,
+    )
+    assert bob_reply_response.status_code == 201
+
+    alice_messages_response = await client.get(
+        f"/v1/rooms/{room['id']}/messages",
+        headers=alice_headers,
+    )
+    assert alice_messages_response.status_code == 200
+    assert [message["content"] for message in alice_messages_response.json()] == [
+        "hello from alice",
+        "hello from bob",
+    ]
+
 
 async def test_global_group_conversation_is_visible_to_invited_members(
     client: AsyncClient,
