@@ -9,6 +9,7 @@ from app.realtime.notifications import publish_notifications
 from app.schemas.attachment import AttachmentResponse
 from app.schemas.message import (
     EventResponse,
+    MessageCommandRequest,
     MessageCreateRequest,
     MessagePageResponse,
     MessageResponse,
@@ -124,6 +125,42 @@ async def update_message_endpoint(
 @router.delete("/messages/{message_id}", response_model=MessageResponse)
 @router.post("/messages/{message_id}/delete", response_model=MessageResponse)
 async def delete_message_endpoint(
+    room_id: UUID,
+    message_id: UUID,
+    session: DbSessionDep,
+    current_user: CurrentUserDep,
+) -> MessageResponse:
+    return await delete_message_response(
+        room_id=room_id,
+        message_id=message_id,
+        session=session,
+        current_user=current_user,
+    )
+
+
+@router.post("/messages/{message_id}/commands", response_model=MessageResponse)
+async def message_command_endpoint(
+    room_id: UUID,
+    message_id: UUID,
+    payload: MessageCommandRequest,
+    session: DbSessionDep,
+    current_user: CurrentUserDep,
+) -> MessageResponse:
+    if payload.type == "message.delete":
+        return await delete_message_response(
+            room_id=room_id,
+            message_id=message_id,
+            session=session,
+            current_user=current_user,
+        )
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="Unsupported message command.",
+    )
+
+
+async def delete_message_response(
+    *,
     room_id: UUID,
     message_id: UUID,
     session: DbSessionDep,

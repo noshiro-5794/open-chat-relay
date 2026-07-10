@@ -229,9 +229,10 @@ export function updateMessage(
 }
 
 export function deleteMessage(token: string, roomId: string, messageId: string): Promise<Message> {
-  return request<Message>(`/v1/rooms/${roomId}/messages/${messageId}/delete`, {
+  return request<Message>(`/v1/rooms/${roomId}/messages/${messageId}/commands`, {
     method: "POST",
     token,
+    body: JSON.stringify({ type: "message.delete" }),
   });
 }
 

@@ -323,7 +323,7 @@ async def test_delete_message_creates_event_and_hides_from_history(client: Async
     assert events[1]["room_event_seq"] == 2
 
 
-async def test_post_delete_message_command_matches_delete_endpoint(client: AsyncClient) -> None:
+async def test_message_delete_command_matches_delete_endpoint(client: AsyncClient) -> None:
     headers = await auth_headers(client)
     room = await create_room(client, headers)
     create_response = await client.post(
@@ -334,7 +334,8 @@ async def test_post_delete_message_command_matches_delete_endpoint(client: Async
     message_id = create_response.json()["id"]
 
     delete_response = await client.post(
-        f"/v1/rooms/{room['id']}/messages/{message_id}/delete",
+        f"/v1/rooms/{room['id']}/messages/{message_id}/commands",
+        json={"type": "message.delete"},
         headers=headers,
     )
     history_response = await client.get(f"/v1/rooms/{room['id']}/messages", headers=headers)

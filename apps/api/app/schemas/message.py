@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -25,6 +25,12 @@ class MessageUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     content: str = Field(min_length=1, max_length=8000)
+
+
+class MessageCommandRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["message.delete"]
 
 
 class MessageResponse(BaseModel):
