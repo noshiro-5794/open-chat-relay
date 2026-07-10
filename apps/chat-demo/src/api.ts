@@ -72,6 +72,14 @@ export interface RoomPresence {
   users: RoomPresenceUser[];
 }
 
+export interface Friend {
+  id: string;
+  user_id: string;
+  email: string;
+  display_name: string;
+  created_at: string;
+}
+
 export interface Attachment {
   id: string;
   workspace_id: string;
@@ -159,6 +167,25 @@ export function updateMe(token: string, displayName: string): Promise<User> {
     method: "PATCH",
     token,
     body: JSON.stringify({ display_name: displayName }),
+  });
+}
+
+export function listFriends(token: string): Promise<Friend[]> {
+  return request<Friend[]>("/v1/friends", { token });
+}
+
+export function addFriend(token: string, email: string): Promise<Friend> {
+  return request<Friend>("/v1/friends", {
+    method: "POST",
+    token,
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function removeFriend(token: string, friendUserId: string): Promise<void> {
+  return request<void>(`/v1/friends/${friendUserId}`, {
+    method: "DELETE",
+    token,
   });
 }
 

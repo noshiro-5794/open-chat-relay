@@ -6,6 +6,7 @@ from app.api.v1.routes.apps import workspace_router as apps_workspace_router
 from app.api.v1.routes.attachments import router as attachments_router
 from app.api.v1.routes.auth import router as auth_router
 from app.api.v1.routes.capabilities import router as capabilities_router
+from app.api.v1.routes.friends import router as friends_router
 from app.api.v1.routes.internal_gateway import router as internal_gateway_router
 from app.api.v1.routes.me import router as me_router
 from app.api.v1.routes.messages import router as messages_router
@@ -29,6 +30,7 @@ api_router.include_router(app_router)
 api_router.include_router(attachments_router)
 api_router.include_router(auth_router)
 api_router.include_router(capabilities_router, tags=["capabilities"])
+api_router.include_router(friends_router)
 api_router.include_router(internal_gateway_router)
 api_router.include_router(me_router)
 api_router.include_router(messages_router)

@@ -4,6 +4,7 @@ from app.models.app import ApiKey, App, Bot, IncomingWebhook
 from app.models.attachment import Attachment, AttachmentStatus
 from app.models.audit import AuditLog, SystemAuditLog
 from app.models.auth_session import AuthSession
+from app.models.contact import UserContact
 from app.models.event import Event
 from app.models.message import Message, MessageSenderType, MessageType
 from app.models.notification import Notification
@@ -37,6 +38,7 @@ __all__ = [
     "RoomRole",
     "SystemAuditLog",
     "User",
+    "UserContact",
     "Workspace",
     "WorkspaceRole",
 ]

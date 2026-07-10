@@ -26,6 +26,7 @@ from app.models import (
     RoomReadState,
     SystemAuditLog,
     User,
+    UserContact,
     Workspace,
 )
 from app.realtime.manager import manager
@@ -52,6 +53,7 @@ _models = (
     RoomReadState,
     SystemAuditLog,
     User,
+    UserContact,
     Workspace,
 )
 

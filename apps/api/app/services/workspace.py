@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Membership, Room, RoomMember, RoomRole, User, Workspace, WorkspaceRole
 from app.services.audit import record_audit_log
 from app.services.auth import get_user_by_email
+from app.services.friend import ensure_mutual_contacts
 
 _slug_pattern = re.compile(r"[^a-z0-9]+")
 
@@ -348,6 +349,11 @@ async def start_direct_conversation(
         raise SelfConversationError
 
     await ensure_workspace_membership(session, workspace_id=workspace_id, user_id=target.id)
+    await ensure_mutual_contacts(
+        session,
+        first_user_id=actor.id,
+        second_user_id=target.id,
+    )
 
     slug = direct_conversation_slug(actor.id, target.id)
     result = await session.execute(

@@ -20,6 +20,7 @@ from app.models import (
     RoomMember,
     RoomReadState,
     User,
+    UserContact,
     Workspace,
 )
 from sqlalchemy import pool
@@ -51,6 +52,7 @@ _models = (
     RoomMember,
     RoomReadState,
     User,
+    UserContact,
     Workspace,
 )
 

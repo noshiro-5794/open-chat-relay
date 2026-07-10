@@ -32,12 +32,14 @@ import {
 import {
   ApiError,
   type Attachment,
+  type Friend,
   type Message,
   type Room,
   type TokenPair,
   type User,
   type Workspace,
   type WorkspaceMember,
+  addFriend,
   confirmAttachmentUpload,
   createAttachmentDownloadIntent,
   createAttachmentUploadIntent,
@@ -48,6 +50,7 @@ import {
   getApiBaseUrl,
   leaveRoom,
   inviteRoomMember,
+  listFriends,
   listMessages,
   listRoomPresence,
   listRooms,
@@ -118,6 +121,7 @@ function App() {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
+  const [friends, setFriends] = useState<Friend[]>([]);
   const [serverUsers, setServerUsers] = useState<User[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -156,6 +160,7 @@ function App() {
   const visibleDirectRooms = filterRooms(directRooms, normalizedSearch);
   const visibleSpaceRooms = filterRooms(spaceRooms, normalizedSearch);
   const visibleHomeRooms = filterRooms(rooms, normalizedSearch);
+  const visibleFriends = filterFriends(friends, normalizedSearch);
   const visibleServerUsers = filterUsers(serverUsers, normalizedSearch, tokenPair?.user.id);
   const activeTypingUsers = [...typingUsers].filter((userId) => userId !== tokenPair?.user.id);
   const onlineUserCount = [...presenceByUserId.values()].filter((status) => status !== "offline").length;
@@ -171,6 +176,7 @@ function App() {
     }
     setProfileName(tokenPair.user.display_name);
     void loadSpaces(tokenPair.access_token, tokenPair.user);
+    void refreshFriends(tokenPair.access_token);
     void refreshUsers(tokenPair.access_token);
   }, [tokenPair]);
 
@@ -302,6 +308,14 @@ function App() {
       setServerUsers(await listUsers(token));
     } catch {
       setServerUsers([]);
+    }
+  }
+
+  async function refreshFriends(token: string) {
+    try {
+      setFriends(await listFriends(token));
+    } catch {
+      setFriends([]);
     }
   }
 
@@ -494,11 +508,13 @@ function App() {
     setError(null);
     setBusyAction("add-contact");
     try {
+      await addFriend(tokenPair.access_token, emailToAdd);
       const room = await startDirectConversation(
         tokenPair.access_token,
         selectedWorkspaceId,
         emailToAdd,
       );
+      await refreshFriends(tokenPair.access_token);
       await refreshMembers(tokenPair.access_token, selectedWorkspaceId);
       await refreshRooms(tokenPair.access_token, selectedWorkspaceId);
       setSelectedRoomId(room.id);
@@ -874,6 +890,7 @@ function App() {
     setWorkspaces([]);
     setRooms([]);
     setMembers([]);
+    setFriends([]);
     setServerUsers([]);
     setMessages([]);
     setPendingMessages([]);
@@ -1038,7 +1055,7 @@ function App() {
             >
               <UserRound size={16} />
               <span>Friends</span>
-              <small>{directRooms.length}</small>
+              <small>{friends.length}</small>
             </button>
             <button
               className={chatView === "groups" ? "active" : ""}
@@ -1175,13 +1192,14 @@ function App() {
           {(chatView === "home" || chatView === "friends") && (
             <section className="sidebar-group people-section">
               <div className="group-heading">
-                <span>People</span>
-                <small>{visibleServerUsers.length}</small>
+                <span>{chatView === "friends" ? "Friends" : "People"}</span>
+                <small>{chatView === "friends" ? visibleFriends.length : visibleServerUsers.length}</small>
               </div>
-              {visibleServerUsers.slice(0, 10).map((user) => {
-                const status = presenceByUserId.get(user.id);
+              {(chatView === "friends" ? visibleFriends : visibleServerUsers).slice(0, 10).map((user) => {
+                const userId = "user_id" in user ? user.user_id : user.id;
+                const status = presenceByUserId.get(userId);
                 return (
-                  <div key={user.id} className="person-entry">
+                  <div key={userId} className="person-entry">
                     <button
                       className="person-main"
                       title={user.email}
@@ -1204,7 +1222,10 @@ function App() {
                   </div>
                 );
               })}
-              {visibleServerUsers.length === 0 && (
+              {chatView === "friends" && visibleFriends.length === 0 && (
+                <div className="empty-list">Add a friend to keep them here.</div>
+              )}
+              {chatView === "home" && visibleServerUsers.length === 0 && (
                 <div className="empty-list">No users match this search.</div>
               )}
             </section>
@@ -1676,6 +1697,17 @@ function filterUsers(users: User[], query: string, currentUserId?: string): User
       user.email.toLowerCase().includes(query)
     );
   });
+}
+
+function filterFriends(friends: Friend[], query: string): Friend[] {
+  if (query === "") {
+    return friends;
+  }
+  return friends.filter(
+    (friend) =>
+      friend.display_name.toLowerCase().includes(query) ||
+      friend.email.toLowerCase().includes(query),
+  );
 }
 
 function createLocalId(): string {
