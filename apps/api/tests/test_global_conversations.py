@@ -54,12 +54,10 @@ async def test_global_direct_conversation_is_visible_to_both_users(
     assert alice_conversations_response.status_code == 200
     assert bob_conversations_response.status_code == 200
     assert [
-        conversation["id"]
-        for conversation in alice_conversations_response.json()["conversations"]
+        conversation["id"] for conversation in alice_conversations_response.json()["conversations"]
     ] == [room["id"]]
     assert [
-        conversation["id"]
-        for conversation in bob_conversations_response.json()["conversations"]
+        conversation["id"] for conversation in bob_conversations_response.json()["conversations"]
     ] == [room["id"]]
 
     message_response = await client.post(
@@ -74,9 +72,7 @@ async def test_global_direct_conversation_is_visible_to_both_users(
         headers=bob_headers,
     )
     assert bob_messages_response.status_code == 200
-    assert [message["content"] for message in bob_messages_response.json()] == [
-        "hello from alice"
-    ]
+    assert [message["content"] for message in bob_messages_response.json()] == ["hello from alice"]
 
     bob_reply_response = await client.post(
         f"/v1/rooms/{room['id']}/messages",
@@ -136,8 +132,7 @@ async def test_global_group_conversation_is_visible_to_invited_members(
     )
     assert bob_conversations_response.status_code == 200
     assert [
-        conversation["id"]
-        for conversation in bob_conversations_response.json()["conversations"]
+        conversation["id"] for conversation in bob_conversations_response.json()["conversations"]
     ] == [group["id"]]
 
     members_response = await client.get(

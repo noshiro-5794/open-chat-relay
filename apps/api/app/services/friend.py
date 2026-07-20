@@ -67,14 +67,12 @@ async def remove_friend(session: AsyncSession, *, user: User, friend_user_id: UU
 
     await session.execute(
         delete(UserContact).where(
-            (UserContact.owner_user_id == user.id)
-            & (UserContact.contact_user_id == friend_user_id)
+            (UserContact.owner_user_id == user.id) & (UserContact.contact_user_id == friend_user_id)
         )
     )
     await session.execute(
         delete(UserContact).where(
-            (UserContact.owner_user_id == friend_user_id)
-            & (UserContact.contact_user_id == user.id)
+            (UserContact.owner_user_id == friend_user_id) & (UserContact.contact_user_id == user.id)
         )
     )
     await session.commit()

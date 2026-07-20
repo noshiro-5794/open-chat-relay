@@ -22,8 +22,9 @@ class PresenceMember:
 
 
 class PresenceStore(Protocol):
-    async def mark_online(self, *, room_id: UUID, user_id: UUID, status: str = "online") -> None:
-        ...
+    async def mark_online(
+        self, *, room_id: UUID, user_id: UUID, status: str = "online"
+    ) -> None: ...
 
     async def mark_status(self, *, room_id: UUID, user_id: UUID, status: str) -> None: ...
 

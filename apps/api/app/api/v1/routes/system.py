@@ -256,9 +256,7 @@ async def active_auth_session_count(session: AsyncSession) -> int:
 async def notification_metrics(session: AsyncSession) -> SystemNotificationMetrics:
     total_result = await session.execute(select(func.count()).select_from(Notification))
     unread_result = await session.execute(
-        select(func.count())
-        .select_from(Notification)
-        .where(Notification.read_at.is_(None))
+        select(func.count()).select_from(Notification).where(Notification.read_at.is_(None))
     )
     return SystemNotificationMetrics(
         total=total_result.scalar_one(),

@@ -76,9 +76,7 @@ async def test_direct_conversation_adds_both_users_to_same_room(
     )
     assert bob_rooms_response.status_code == 200
     bob_rooms = bob_rooms_response.json()
-    assert [(room["id"], room["role"]) for room in bob_rooms] == [
-        (direct_room["id"], "member")
-    ]
+    assert [(room["id"], room["role"]) for room in bob_rooms] == [(direct_room["id"], "member")]
 
     bob_message_response = await client.post(
         f"/v1/rooms/{direct_room['id']}/messages",

@@ -4,9 +4,7 @@ import secrets
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Generate OpenChatRelay production secret values."
-    )
+    parser = argparse.ArgumentParser(description="Generate OpenChatRelay production secret values.")
     parser.add_argument(
         "--bytes",
         type=int,

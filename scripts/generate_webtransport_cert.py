@@ -16,9 +16,7 @@ def main() -> int:
     key_path = out_dir / "webtransport.key"
     cert_path = out_dir / "webtransport.crt"
     subject_alt_name = (
-        "subjectAltName=IP:{host}"
-        if is_ip_address(args.host)
-        else "subjectAltName=DNS:{host}"
+        "subjectAltName=IP:{host}" if is_ip_address(args.host) else "subjectAltName=DNS:{host}"
     )
 
     subprocess.run(  # noqa: S603

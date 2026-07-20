@@ -142,17 +142,11 @@ def validate_startup_settings(settings: Settings) -> None:
         errors.append(
             "OPEN_CHAT_RELAY_GATEWAY_INTERNAL_TOKEN is required when WebTransport is enabled."
         )
-    gateway_token_is_unsafe = (
-        settings.gateway_internal_token == DEFAULT_GATEWAY_INTERNAL_TOKEN
-        or (
-            settings.gateway_internal_token is not None
-            and is_placeholder_secret(settings.gateway_internal_token)
-        )
+    gateway_token_is_unsafe = settings.gateway_internal_token == DEFAULT_GATEWAY_INTERNAL_TOKEN or (
+        settings.gateway_internal_token is not None
+        and is_placeholder_secret(settings.gateway_internal_token)
     )
-    if (
-        settings.webtransport_enabled
-        and gateway_token_is_unsafe
-    ):
+    if settings.webtransport_enabled and gateway_token_is_unsafe:
         errors.append("OPEN_CHAT_RELAY_GATEWAY_INTERNAL_TOKEN must be changed in production.")
 
     if errors:

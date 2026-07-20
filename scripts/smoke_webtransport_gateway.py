@@ -8,9 +8,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-API_BASE_URL = os.environ.get("OPEN_CHAT_RELAY_SMOKE_BASE_URL", "http://localhost:8000").rstrip(
-    "/"
-)
+API_BASE_URL = os.environ.get("OPEN_CHAT_RELAY_SMOKE_BASE_URL", "http://localhost:8000").rstrip("/")
 GATEWAY_BASE_URL = os.environ.get(
     "OPEN_CHAT_RELAY_SMOKE_WEBTRANSPORT_GATEWAY_URL",
     "http://localhost:8081",
@@ -219,9 +217,7 @@ def main() -> int:
         ).encode("utf-8"),
         content_type="application/x-ndjson",
     )
-    stream_frames = [
-        json.loads(line) for line in stream_text.splitlines() if line.strip()
-    ]
+    stream_frames = [json.loads(line) for line in stream_text.splitlines() if line.strip()]
     if len(stream_frames) < 2 or stream_frames[1]["type"] != "message.created":
         raise RuntimeError(f"Expected streamed replay event, got: {stream_frames}")
     print("Gateway stream relay returned message event.")

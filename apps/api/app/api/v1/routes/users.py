@@ -9,8 +9,8 @@ from app.schemas.auth import UserResponse
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-LimitQuery = Annotated[int, Query(ge=1, le=100)]  # noqa: UP040
-SearchQuery = Annotated[str | None, Query(min_length=1, max_length=120)]  # noqa: UP040
+LimitQuery = Annotated[int, Query(ge=1, le=100)]
+SearchQuery = Annotated[str | None, Query(min_length=1, max_length=120)]
 
 
 @router.get("", response_model=list[UserResponse])

@@ -40,7 +40,7 @@ async def list_conversations(session: AsyncSession, *, user: User) -> list[RoomW
             or_(
                 Room.is_private.is_(False),
                 func.coalesce(room_member_counts.c.member_count, 0) > 1,
-            )
+            ),
         )
         .order_by(Room.created_at)
     )

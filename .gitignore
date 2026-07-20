@@ -211,6 +211,9 @@ tempCodeRunnerFile.py
 node_modules/
 dist/
 
+# macOS
+.DS_Store
+
 # Local deployment secrets and generated certificates
 local/
 

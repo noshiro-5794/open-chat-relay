@@ -73,6 +73,7 @@ async def client() -> AsyncIterator[AsyncClient]:
 
     app = create_app(
         Settings(
+            _env_file=None,
             environment="test",
             jwt_secret_key="test-secret-at-least-32-bytes-long",  # noqa: S106
             gateway_internal_token="test-gateway-token",  # noqa: S106
@@ -108,6 +109,7 @@ def sync_client() -> Iterator[TestClient]:
 
     app = create_app(
         Settings(
+            _env_file=None,
             environment="test",
             jwt_secret_key="test-secret-at-least-32-bytes-long",  # noqa: S106
             gateway_internal_token="test-gateway-token",  # noqa: S106

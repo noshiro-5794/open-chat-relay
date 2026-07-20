@@ -7,9 +7,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
-API_BASE_URL = os.environ.get("OPEN_CHAT_RELAY_DEPLOY_API_URL", "http://localhost:8000").rstrip(
-    "/"
-)
+API_BASE_URL = os.environ.get("OPEN_CHAT_RELAY_DEPLOY_API_URL", "http://localhost:8000").rstrip("/")
 CONSOLE_BASE_URL = os.environ.get(
     "OPEN_CHAT_RELAY_DEPLOY_CONSOLE_URL",
     "http://localhost:5173",

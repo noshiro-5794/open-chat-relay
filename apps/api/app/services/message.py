@@ -375,10 +375,7 @@ async def list_messages_page(
     if cursor_message is not None:
         statement = statement.where(
             (Message.created_at < cursor_message.created_at)
-            | (
-                (Message.created_at == cursor_message.created_at)
-                & (Message.id < cursor_message.id)
-            )
+            | ((Message.created_at == cursor_message.created_at) & (Message.id < cursor_message.id))
         )
 
     statement = statement.order_by(Message.created_at.desc(), Message.id.desc()).limit(limit + 1)
